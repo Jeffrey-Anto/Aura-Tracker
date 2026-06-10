@@ -1,0 +1,263 @@
+@import "tailwindcss";
+
+/* -------------------------------------------------------------
+ * Aura | Global CSS Rules & Styling System (Tailwind v4 Ext)
+ * Custom glassmorphism, ambient background blobs, keyframe glows
+ * ------------------------------------------------------------- */
+
+@theme {
+  --color-bg-base: #060913;
+  --color-border-glass: rgba(255, 255, 255, 0.08);
+}
+
+:root {
+  --font-heading: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  
+  --grad-primary: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+  --grad-secondary: linear-gradient(135deg, #7f00ff 0%, #e100ff 100%);
+  --grad-accent: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
+  --grad-success: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
+  --grad-gold: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+  
+  --glow-primary: 0 0 15px rgba(0, 242, 254, 0.3);
+  --glow-secondary: 0 0 15px rgba(225, 0, 255, 0.3);
+  --glow-accent: 0 0 15px rgba(255, 8, 68, 0.3);
+}
+
+body {
+  background-color: #060913;
+  color: #f8fafc;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.01);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Background Glowing Blobs */
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.15;
+}
+
+.blob-1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #00f2fe 0%, transparent 70%);
+  top: -100px;
+  left: -100px;
+  animation: pulse-slow 20s infinite alternate;
+}
+
+.blob-2 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #e100ff 0%, transparent 70%);
+  bottom: -150px;
+  right: -100px;
+  animation: pulse-slow 25s infinite alternate-reverse;
+}
+
+.blob-3 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, #ff0844 0%, transparent 70%);
+  top: 40%;
+  left: 45%;
+  animation: drift 30s infinite linear;
+}
+
+/* CSS Keyframes */
+@keyframes pulse-slow {
+  0% { transform: scale(1) translate(0, 0); }
+  100% { transform: scale(1.15) translate(40px, 30px); }
+}
+
+@keyframes drift {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(50px, -40px) rotate(180deg); }
+  100% { transform: translate(0, 0) rotate(360deg); }
+}
+
+@keyframes flame-flicker {
+  0% { transform: scale(1); filter: drop-shadow(0 0 2px rgba(255,71,105,0.4)); }
+  100% { transform: scale(1.1); filter: drop-shadow(0 0 8px rgba(255,71,105,0.8)); }
+}
+
+.animate-flame {
+  animation: flame-flicker 1.5s infinite alternate;
+}
+
+/* Circular Progress Utilities */
+.circle-progress-svg {
+  transform: rotate(-90deg);
+}
+
+.circle-progress-bar-svg {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glassmorphism overrides */
+.glass-panel {
+  background: rgba(15, 22, 39, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Heatmap cell utilities */
+.heatmap-cell-0 { background-color: #121826; }
+.heatmap-cell-1 { background-color: #0e4429; }
+.heatmap-cell-2 { background-color: #006d32; }
+.heatmap-cell-3 { background-color: #26a641; }
+.heatmap-cell-4 { background-color: #39d353; }
+
+/* -------------------------------------------------------------
+ * Aura | Light Mode Styling Overrides
+ * ------------------------------------------------------------- */
+.light-mode {
+  --color-bg-base: #f8fafc;
+  --color-border-glass: rgba(15, 23, 42, 0.08);
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.light-mode body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+.light-mode .glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.05);
+}
+
+.light-mode .glass-panel:hover {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.light-mode aside,
+.light-mode .lg\:hidden {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.light-mode header {
+  background-color: rgba(248, 250, 252, 0.4) !important;
+  border-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.light-mode .absolute.bottom-16 {
+  background-color: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08) !important;
+}
+
+/* Light mode text color mappings */
+.light-mode .text-slate-100 { color: #0f172a !important; }
+.light-mode .text-slate-200 { color: #1e293b !important; }
+.light-mode .text-slate-300 { color: #334155 !important; }
+.light-mode .text-slate-400 { color: #475569 !important; }
+.light-mode .text-slate-500 { color: #64748b !important; }
+.light-mode .text-slate-600 { color: #94a3b8 !important; }
+.light-mode .text-white { color: #0f172a !important; }
+.light-mode .text-white\/60 { color: rgba(15, 23, 42, 0.6) !important; }
+
+/* Background helpers */
+.light-mode .bg-white\/2 { background-color: rgba(15, 23, 42, 0.02) !important; }
+.light-mode .bg-white\/3 { background-color: rgba(15, 23, 42, 0.04) !important; }
+.light-mode .bg-white\/5 { background-color: rgba(15, 23, 42, 0.06) !important; }
+.light-mode .bg-white\/8 { background-color: rgba(15, 23, 42, 0.08) !important; }
+.light-mode .bg-white\/10 { background-color: rgba(15, 23, 42, 0.1) !important; }
+.light-mode .bg-\[\#090e1a\]\/30 { background-color: rgba(0, 0, 0, 0.02) !important; }
+.light-mode .bg-\[\#0f1627\]\/85 { background-color: rgba(255, 255, 255, 0.85) !important; }
+.light-mode .bg-\[\#0f1627\]\/45 { background-color: rgba(255, 255, 255, 0.65) !important; }
+
+/* Border helpers */
+.light-mode .border-white\/5 { border-color: rgba(15, 23, 42, 0.06) !important; }
+.light-mode .border-white\/8 { border-color: rgba(15, 23, 42, 0.09) !important; }
+.light-mode .border-white\/10 { border-color: rgba(15, 23, 42, 0.12) !important; }
+.light-mode .border-white\/15 { border-color: rgba(15, 23, 42, 0.18) !important; }
+.light-mode .divide-white\/2 > * { border-color: rgba(15, 23, 42, 0.04) !important; }
+
+/* Form inputs & dropdowns */
+.light-mode select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+}
+.light-mode select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+.light-mode input[type="text"],
+.light-mode input[type="number"],
+.light-mode input[type="date"],
+.light-mode input[type="email"],
+.light-mode input[type="password"] {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.15) !important;
+}
+.light-mode input[type="text"]::placeholder,
+.light-mode input[type="number"]::placeholder,
+.light-mode input[type="date"]::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Specific elements */
+.light-mode .circle-progress-svg circle:first-child {
+  stroke: rgba(15, 23, 42, 0.05) !important;
+}
+.light-mode .circle-progress-bar-svg {
+  stroke: url(#cyan-blue-grad-react) !important;
+}
+.light-mode text {
+  fill: #64748b !important;
+}
+.light-mode .recharts-cartesian-grid-horizontal line {
+  stroke: rgba(15, 23, 42, 0.05) !important;
+}
+.light-mode .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.1) !important;
+  color: #0f172a !important;
+}
+
+/* Ambient Blobs */
+.light-mode .blob-1 {
+  background: radial-gradient(circle, rgba(0, 242, 254, 0.15) 0%, transparent 70%);
+}
+.light-mode .blob-2 {
+  background: radial-gradient(circle, rgba(225, 0, 255, 0.12) 0%, transparent 70%);
+}
+.light-mode .blob-3 {
+  background: radial-gradient(circle, rgba(255, 8, 68, 0.08) 0%, transparent 70%);
+}
