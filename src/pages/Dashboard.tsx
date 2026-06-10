@@ -49,8 +49,8 @@ export const Dashboard: React.FC = () => {
       last30DaysDates.push(getLocalDateString(d));
     }
     
-    const studyGoal = goals.daily.studyHours || 4;
-    const workoutGoal = goals.daily.workoutMins || 30;
+    const studyGoal = goals.daily.studyHours || 0;
+    const workoutGoal = goals.daily.workoutMins || 0;
 
     last30DaysDates.forEach(dateStr => {
       const dayLogs = logs.filter(l => l.date === dateStr);
@@ -62,12 +62,24 @@ export const Dashboard: React.FC = () => {
           .filter(l => l.type === 'workout')
           .reduce((sum, l) => sum + l.amount, 0);
 
-        const studyPct = studyGoal > 0 ? Math.min(100, (studyLogged / studyGoal) * 100) : 100;
-        const workoutPct = workoutGoal > 0 ? Math.min(100, (workoutLogged / workoutGoal) * 100) : 100;
-        const goalScore = (studyPct + workoutPct) / 2;
-        const studyHoursScore = Math.min(100, (studyLogged / 4) * 100);
+        const studyPct = studyGoal > 0 ? Math.min(100, (studyLogged / studyGoal) * 100) : 0;
+        const workoutPct = workoutGoal > 0 ? Math.min(100, (workoutLogged / workoutGoal) * 100) : 0;
         
-        const totalScore = Math.round((goalScore * 0.5) + (100 * 0.2) + (studyHoursScore * 0.3));
+        let goalScore = 0;
+        let activeGoalsCount = 0;
+        if (studyGoal > 0) {
+          goalScore += studyPct;
+          activeGoalsCount++;
+        }
+        if (workoutGoal > 0) {
+          goalScore += workoutPct;
+          activeGoalsCount++;
+        }
+        
+        const finalGoalScore = activeGoalsCount > 0 ? (goalScore / activeGoalsCount) : (studyLogged > 0 || workoutLogged > 0 ? 100 : 0);
+        const studyHoursScore = studyGoal > 0 ? Math.min(100, (studyLogged / studyGoal) * 100) : (studyLogged > 0 ? 100 : 0);
+        
+        const totalScore = Math.round((finalGoalScore * 0.7) + (studyHoursScore * 0.3));
         totalScoreSum += Math.min(100, Math.max(0, totalScore));
         loggedDaysCount++;
       }

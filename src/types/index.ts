@@ -65,6 +65,14 @@ export interface Profile {
   theme: string;
 }
 
+export interface SkillLevel {
+  id: string;
+  skill_id: string;
+  level_number: number;
+  name: string;
+  display_order: number;
+}
+
 export interface RoadmapTopic {
   id: string;
   level: number;
@@ -80,6 +88,7 @@ export interface Skill {
   xp: number;
   color: string;
   roadmap: RoadmapTopic[];
+  levels: SkillLevel[];
 }
 
 export interface Badge {

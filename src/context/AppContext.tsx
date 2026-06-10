@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
-import type { Log, CustomActivity, Goals, Skill, Badge, Milestone, StreakState, AppState, GoalTarget, Task, Profile, Goal } from '../types';
+import type { Log, CustomActivity, Goals, Skill, SkillLevel, Badge, Milestone, StreakState, AppState, GoalTarget, Task, Profile, Goal } from '../types';
 import { getLocalDateString, parseLocalDate, getRelativeLocalDateString } from '../utils/date';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 
@@ -45,11 +45,16 @@ interface AppContextType extends AppState {
   updateGoal: (period: 'daily' | 'weekly' | 'monthly', target: keyof GoalTarget, value: number) => void;
   
   // Skill CRUD
-  createSkill: (name: string, color?: string) => Promise<void>;
+  createSkill: (name: string, color?: string, templateType?: string) => Promise<void>;
   deleteSkill: (slug: string) => Promise<void>;
   addRoadmapTopic: (skillId: string, level: number, topic: string) => Promise<void>;
+  editRoadmapTopic: (skillId: string, topicId: string, updatedName: string) => Promise<void>;
   deleteRoadmapTopic: (skillId: string, topicId: string) => Promise<void>;
   toggleRoadmapTopic: (skillId: string, topicId: string) => Promise<void>;
+  addRoadmapLevel: (skillId: string, name: string) => Promise<void>;
+  editRoadmapLevel: (skillId: string, levelNum: number, updates: { name?: string; display_order?: number }) => Promise<void>;
+  deleteRoadmapLevel: (skillId: string, levelNum: number) => Promise<void>;
+  reorderRoadmapLevels: (skillId: string, reorderedLevels: SkillLevel[]) => Promise<void>;
   
   // Custom Habit CRUD
   createCustomActivity: (name: string, category: string, unit: string, xpPerUnit: number) => Promise<void>;
@@ -87,6 +92,102 @@ const INITIAL_MILESTONES: Milestone[] = [
   { id: 'milestone-3', title: 'Build a full SQL database schema', targetSkill: 'dbms', completed: false, xpAward: 250 },
   { id: 'milestone-4', title: 'Deliver a presentation to 20+ people', targetSkill: 'communication', completed: false, xpAward: 350 }
 ];
+
+const TEMPLATE_TOPICS: Record<string, { level: number; topic: string }[]> = {
+  react: [
+    { level: 1, topic: 'HTML & CSS Fundamentals' },
+    { level: 1, topic: 'Modern JavaScript (ES6+)' },
+    { level: 1, topic: 'Basic Web APIs & DOM manipulation' },
+    { level: 2, topic: 'React Components & Props' },
+    { level: 2, topic: 'JSX Syntax & Rendering' },
+    { level: 2, topic: 'Event Handling' },
+    { level: 3, topic: 'State Management (useState/useReducer)' },
+    { level: 3, topic: 'Component Lifecycle & useEffect' },
+    { level: 3, topic: 'React Router & Navigation' },
+    { level: 4, topic: 'Global State (Context API / Redux)' },
+    { level: 4, topic: 'Custom Hooks development' },
+    { level: 4, topic: 'React Performance (memo, useMemo, useCallback)' },
+    { level: 5, topic: 'Unit Testing with Jest & React Testing Library' },
+    { level: 5, topic: 'Deployment (Vercel / Netlify)' },
+    { level: 5, topic: 'CI/CD Pipelines for Frontend' }
+  ],
+  dsa: [
+    { level: 1, topic: 'Arrays & Array Operations' },
+    { level: 1, topic: 'Strings & Basic Algorithms' },
+    { level: 1, topic: 'Big O Complexity Analysis' },
+    { level: 2, topic: 'Singly & Doubly Linked Lists' },
+    { level: 2, topic: 'Stacks & Queues implementation' },
+    { level: 2, topic: 'Recursion basics' },
+    { level: 3, topic: 'Sorting & Searching (Binary Search)' },
+    { level: 3, topic: 'Binary Trees & BST Traversals' },
+    { level: 3, topic: 'Hash Tables & Collisions' },
+    { level: 4, topic: 'Graphs (BFS & DFS)' },
+    { level: 4, topic: 'Greedy Algorithms' },
+    { level: 4, topic: 'Introduction to Dynamic Programming' },
+    { level: 5, topic: 'Advanced Dynamic Programming' },
+    { level: 5, topic: 'Trie Data Structures' },
+    { level: 5, topic: 'Segment Trees & Range Queries' }
+  ],
+  aptitude: [
+    { level: 1, topic: 'Number Systems & Divisibility' },
+    { level: 1, topic: 'Percentages & Fractions' },
+    { level: 1, topic: 'Averages & Ratios' },
+    { level: 2, topic: 'Ratio & Proportion' },
+    { level: 2, topic: 'Profit, Loss & Discount' },
+    { level: 2, topic: 'Simple & Compound Interest' },
+    { level: 3, topic: 'Time, Speed & Distance' },
+    { level: 3, topic: 'Time & Work' },
+    { level: 3, topic: 'Permutations & Combinations' },
+    { level: 4, topic: 'Probability Fundamentals' },
+    { level: 4, topic: 'Data Interpretation (Bar/Pie Charts)' },
+    { level: 4, topic: 'Logical Syllogisms & Venn Diagrams' },
+    { level: 5, topic: 'Verbal & Reading Comprehension' },
+    { level: 5, topic: 'Critical Thinking Problems' },
+    { level: 5, topic: 'Speed Test & Mock Aptitude Exams' }
+  ],
+  dbms: [
+    { level: 1, topic: 'Database Concepts & DBMS Architecture' },
+    { level: 1, topic: 'Entity-Relationship (ER) Diagrams' },
+    { level: 1, topic: 'Relational Model & Constraints' },
+    { level: 2, topic: 'SQL Queries (SELECT, WHERE, JOINs)' },
+    { level: 2, topic: 'Aggregation Functions & GROUP BY' },
+    { level: 2, topic: 'Primary, Foreign, & Unique Keys' },
+    { level: 3, topic: 'Database Normalization (1NF to BCNF)' },
+    { level: 3, topic: 'Subqueries & Nested Relational Algebra' },
+    { level: 3, topic: 'Database Views & Secondary Indexes' },
+    { level: 4, topic: 'Transaction Management (ACID)' },
+    { level: 4, topic: 'Concurrency Control & Locking' },
+    { level: 4, topic: 'OS Crash Recovery Protocols' },
+    { level: 5, topic: 'Query Optimization & Execution Plans' },
+    { level: 5, topic: 'NoSQL Databases (MongoDB / Redis)' },
+    { level: 5, topic: 'Database Security & Row Level Security' }
+  ],
+  os: [
+    { level: 1, topic: 'OS Architectures & Microkernels' },
+    { level: 1, topic: 'System Calls & Process Creation' },
+    { level: 1, topic: 'Processes vs Threads' },
+    { level: 2, topic: 'CPU Scheduling Algorithms' },
+    { level: 2, topic: 'Process Synchronization & Race Conditions' },
+    { level: 2, topic: 'Semaphores & Mutex Locks' },
+    { level: 3, topic: 'Deadlock Banker\'s Algorithm' },
+    { level: 3, topic: 'Memory Paging & Segmentation' },
+    { level: 3, topic: 'Virtual Memory & Page Replacement (LRU)' },
+    { level: 4, topic: 'File System Directories & Allocations' },
+    { level: 4, topic: 'Disk Scheduling (SSTF, SCAN)' },
+    { level: 4, topic: 'I/O Hardware & Interrupt Handling' },
+    { level: 5, topic: 'Containerization & Docker Concepts' },
+    { level: 5, topic: 'OS Security Access Matrix' },
+    { level: 5, topic: 'Real-Time Operating Systems (RTOS)' }
+  ]
+};
+
+const DEFAULT_LEVEL_NAMES: Record<number, string> = {
+  1: 'Fundamentals',
+  2: 'Basic Core concepts',
+  3: 'Intermediate Logic',
+  4: 'Advanced Stack',
+  5: 'Testing & Operations'
+};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Auth state
@@ -247,7 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .order('date', { ascending: false });
       setLogs(activitiesData || []);
 
-      // 6. Load skills & skill roadmaps
+      // 6. Load skills, skill roadmaps, and custom levels
       const { data: skillsData } = await supabase
         .from('skills')
         .select('*')
@@ -258,13 +359,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: true });
-
+      const { data: levelsData } = await supabase
+        .from('skill_levels')
+        .select('*')
+        .eq('user_id', userId)
+        .order('display_order', { ascending: true });
+ 
       const dbSkills = skillsData || [];
       const dbTopics = topicsData || [];
+      const dbLevels = levelsData || [];
       const skillsMap: Record<string, Skill> = {};
-
+ 
       dbSkills.forEach(s => {
         const slug = s.slug || s.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+        
+        // Find DB levels for this skill
+        const skillLevels = dbLevels
+          .filter(l => l.skill_id === s.id)
+          .map(l => ({
+            id: l.id,
+            skill_id: l.skill_id,
+            level_number: l.level_number,
+            name: l.name,
+            display_order: l.display_order
+          }));
+
+        // Fallback default levels if none are stored in db yet
+        const finalLevels = skillLevels.length > 0 ? skillLevels : [1, 2, 3, 4, 5].map(num => ({
+          id: `temp-${s.id}-${num}`,
+          skill_id: s.id,
+          level_number: num,
+          name: DEFAULT_LEVEL_NAMES[num] || `Level ${num}`,
+          display_order: num
+        }));
+
         skillsMap[slug] = {
           id: s.id,
           name: s.name,
@@ -279,7 +407,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               level: t.level,
               topic: t.topic,
               completed: t.completed
-            }))
+            })),
+          levels: finalLevels
         };
       });
       setSkills(skillsMap);
@@ -727,21 +856,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // --- Goal CRUD ---
-  const createGoal = async (g: Omit<Goal, 'id' | 'current_value' | 'is_archived'>) => {
-    if (!user) return;
-    const { data, error } = await supabase
+  const refreshGoalsState = async (userId: string) => {
+    const { data: refreshedGoals } = await supabase
       .from('goals')
-      .insert({ ...g, user_id: user.id })
-      .select()
-      .single();
-
-    if (error) throw error;
-    setGoalsList(prev => [...prev, data]);
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
     
-    // Refresh mapped legacy targets state
-    const { data: refreshedGoals } = await supabase.from('goals').select('*').eq('user_id', user.id);
+    const dbGoals = refreshedGoals || [];
+    setGoalsList(dbGoals);
+
     const mappedGoals: Goals = JSON.parse(JSON.stringify(DEFAULT_GOALS));
-    (refreshedGoals || []).forEach(gItem => {
+    dbGoals.forEach(gItem => {
       if (!gItem.is_archived && (gItem.period === 'daily' || gItem.period === 'weekly' || gItem.period === 'monthly')) {
         const period = gItem.period as 'daily' | 'weekly' | 'monthly';
         const field = gItem.target_field as keyof GoalTarget;
@@ -751,6 +877,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
     setGoals(mappedGoals);
+  };
+
+  const createGoal = async (g: Omit<Goal, 'id' | 'current_value' | 'is_archived'>) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('goals')
+      .insert({ ...g, user_id: user.id });
+
+    if (error) throw error;
+    await refreshGoalsState(user.id);
 
     setToast({
       title: 'Goal Registered',
@@ -767,7 +903,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .eq('id', id);
 
     if (error) throw error;
-    setGoalsList(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+    await refreshGoalsState(user.id);
 
     setToast({
       title: 'Goal Updated',
@@ -784,7 +920,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .eq('id', id);
 
     if (error) throw error;
-    setGoalsList(prev => prev.filter(g => g.id !== id));
+    await refreshGoalsState(user.id);
 
     setToast({
       title: 'Goal Removed',
@@ -801,7 +937,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .eq('id', id);
 
     if (error) throw error;
-    setGoalsList(prev => prev.map(g => g.id === id ? { ...g, is_archived: true } : g));
+    await refreshGoalsState(user.id);
 
     setToast({
       title: 'Goal Archived',
@@ -831,8 +967,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // --- Skill CRUD ---
-  const createSkill = async (name: string, color: string = 'primary') => {
+  const createSkill = async (name: string, color: string = 'primary', templateType: string = 'empty') => {
     if (!user) return;
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
     if (skills[slug]) return;
@@ -855,6 +990,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
+    // 1. Insert default level names into skill_levels
+    const defaultLevelsToInsert = [1, 2, 3, 4, 5].map(num => ({
+      skill_id: newSkill.id,
+      user_id: user.id,
+      level_number: num,
+      name: DEFAULT_LEVEL_NAMES[num] || `Level ${num}`,
+      display_order: num
+    }));
+
+    const { data: insertedLevels, error: levelsErr } = await supabase
+      .from('skill_levels')
+      .insert(defaultLevelsToInsert)
+      .select();
+
+    if (levelsErr) {
+      console.error("Error inserting default skill levels:", levelsErr);
+    }
+
+    const finalLevels = (insertedLevels || []).map(l => ({
+      id: l.id,
+      skill_id: l.skill_id,
+      level_number: l.level_number,
+      name: l.name,
+      display_order: l.display_order
+    }));
+
+    // 2. Insert template topics if selected
+    let roadmapTopics: any[] = [];
+    if (templateType && templateType !== 'empty' && TEMPLATE_TOPICS[templateType]) {
+      const topicsToInsert = TEMPLATE_TOPICS[templateType].map(topic => ({
+        skill_id: newSkill.id,
+        user_id: user.id,
+        level: topic.level,
+        topic: topic.topic,
+        completed: false
+      }));
+
+      const { data: insertedTopics, error: topicsErr } = await supabase
+        .from('skill_topics')
+        .insert(topicsToInsert)
+        .select();
+
+      if (topicsErr) {
+        console.error("Error inserting template topics:", topicsErr);
+      } else {
+        roadmapTopics = (insertedTopics || []).map(t => ({
+          id: t.id,
+          level: t.level,
+          topic: t.topic,
+          completed: t.completed
+        }));
+      }
+    }
+
     setSkills(prev => ({
       ...prev,
       [slug]: {
@@ -864,7 +1053,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         level: 1,
         xp: 0,
         color,
-        roadmap: []
+        roadmap: roadmapTopics,
+        levels: finalLevels.length > 0 ? finalLevels : defaultLevelsToInsert.map((l) => ({
+          id: `temp-${newSkill.id}-${l.level_number}`,
+          skill_id: newSkill.id,
+          level_number: l.level_number,
+          name: l.name,
+          display_order: l.display_order
+        }))
       }
     }));
 
@@ -984,6 +1180,206 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setToast({
       title: 'Topic Deleted',
       message: `Roadmap topic removed.`,
+      type: 'info'
+    });
+  };
+
+  const editRoadmapTopic = async (skillId: string, topicId: string, updatedName: string) => {
+    if (!user || !skills[skillId]) return;
+
+    const { error } = await supabase
+      .from('skill_topics')
+      .update({ topic: updatedName })
+      .eq('id', topicId);
+
+    if (error) throw error;
+
+    setSkills(prev => {
+      const skill = prev[skillId];
+      return {
+        ...prev,
+        [skillId]: {
+          ...skill,
+          roadmap: skill.roadmap.map(t => t.id === topicId ? { ...t, topic: updatedName } : t)
+        }
+      };
+    });
+
+    setToast({
+      title: 'Topic Updated',
+      message: `Roadmap topic title updated.`,
+      type: 'info'
+    });
+  };
+
+  const addRoadmapLevel = async (skillId: string, name: string) => {
+    if (!user || !skills[skillId]) return;
+    const skillUuid = skills[skillId].id;
+
+    // Find the next level number and display order
+    const currentLevels = skills[skillId].levels;
+    const nextLevelNum = currentLevels.length > 0 ? Math.max(...currentLevels.map(l => l.level_number)) + 1 : 1;
+    const nextDisplayOrder = currentLevels.length > 0 ? Math.max(...currentLevels.map(l => l.display_order)) + 1 : 1;
+
+    const { data: newLevel, error } = await supabase
+      .from('skill_levels')
+      .insert({
+        skill_id: skillUuid,
+        user_id: user.id,
+        level_number: nextLevelNum,
+        name,
+        display_order: nextDisplayOrder
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    setSkills(prev => {
+      const skill = prev[skillId];
+      return {
+        ...prev,
+        [skillId]: {
+          ...skill,
+          levels: [...skill.levels, {
+            id: newLevel.id,
+            skill_id: skillUuid,
+            level_number: nextLevelNum,
+            name,
+            display_order: nextDisplayOrder
+          }]
+        }
+      };
+    });
+
+    setToast({
+      title: 'Level Created',
+      message: `"${name}" added as Level ${nextLevelNum}.`,
+      type: 'success'
+    });
+  };
+
+  const editRoadmapLevel = async (skillId: string, levelNum: number, updates: { name?: string; display_order?: number }) => {
+    if (!user || !skills[skillId]) return;
+    const skillUuid = skills[skillId].id;
+
+    const updatesForDb: any = {};
+    if (updates.name !== undefined) updatesForDb.name = updates.name;
+    if (updates.display_order !== undefined) updatesForDb.display_order = updates.display_order;
+
+    const { error } = await supabase
+      .from('skill_levels')
+      .update(updatesForDb)
+      .eq('skill_id', skillUuid)
+      .eq('level_number', levelNum);
+
+    if (error) throw error;
+
+    setSkills(prev => {
+      const skill = prev[skillId];
+      return {
+        ...prev,
+        [skillId]: {
+          ...skill,
+          levels: skill.levels.map(l => l.level_number === levelNum ? { ...l, ...updates } : l)
+        }
+      };
+    });
+
+    setToast({
+      title: 'Level Updated',
+      message: `Roadmap level updated.`,
+      type: 'info'
+    });
+  };
+
+  const deleteRoadmapLevel = async (skillId: string, levelNum: number) => {
+    if (!user || !skills[skillId]) return;
+    const skillUuid = skills[skillId].id;
+
+    // Find all topics at this level
+    const lvlTopics = skills[skillId].roadmap.filter(t => t.level === levelNum);
+    const completedCount = lvlTopics.filter(t => t.completed).length;
+
+    if (lvlTopics.length > 0) {
+      const { error: topicsErr } = await supabase
+        .from('skill_topics')
+        .delete()
+        .eq('skill_id', skillUuid)
+        .eq('level', levelNum);
+
+      if (topicsErr) throw topicsErr;
+    }
+
+    const { error: levelErr } = await supabase
+      .from('skill_levels')
+      .delete()
+      .eq('skill_id', skillUuid)
+      .eq('level_number', levelNum);
+
+    if (levelErr) throw levelErr;
+
+    // Deduct XP for completed topics in this level
+    if (completedCount > 0) {
+      const changeXp = -(completedCount * 100);
+      const nextGlobalXp = Math.max(0, xp + changeXp);
+      const nextGlobalLvl = Math.floor(nextGlobalXp / 1000) + 1;
+      
+      await supabase.from('profiles').update({ xp: nextGlobalXp, level: nextGlobalLvl }).eq('id', user.id);
+      setXp(nextGlobalXp);
+      setLevel(nextGlobalLvl);
+
+      const nextSkillXp = Math.max(0, skills[skillId].xp + changeXp);
+      const nextSkillLvl = Math.floor(nextSkillXp / 1000) + 1;
+      await supabase.from('skills').update({ xp: nextSkillXp, level: nextSkillLvl }).eq('id', skillUuid);
+    }
+
+    setSkills(prev => {
+      const skill = prev[skillId];
+      const nextSkillXp = completedCount > 0 ? Math.max(0, skill.xp - (completedCount * 100)) : skill.xp;
+      return {
+        ...prev,
+        [skillId]: {
+          ...skill,
+          xp: nextSkillXp,
+          level: completedCount > 0 ? Math.floor(nextSkillXp / 1000) + 1 : skill.level,
+          roadmap: skill.roadmap.filter(t => t.level !== levelNum),
+          levels: skill.levels.filter(l => l.level_number !== levelNum)
+        }
+      };
+    });
+
+    setToast({
+      title: 'Level Deleted',
+      message: `Level ${levelNum} and all its topics removed.`,
+      type: 'info'
+    });
+  };
+
+  const reorderRoadmapLevels = async (skillId: string, reorderedLevels: SkillLevel[]) => {
+    if (!user || !skills[skillId]) return;
+
+    for (const lvl of reorderedLevels) {
+      await supabase
+        .from('skill_levels')
+        .update({ display_order: lvl.display_order })
+        .eq('id', lvl.id);
+    }
+
+    setSkills(prev => {
+      const skill = prev[skillId];
+      return {
+        ...prev,
+        [skillId]: {
+          ...skill,
+          levels: reorderedLevels
+        }
+      };
+    });
+
+    setToast({
+      title: 'Roadmap Reordered',
+      message: 'Levels order saved.',
       type: 'info'
     });
   };
@@ -1628,8 +2024,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createSkill,
       deleteSkill,
       addRoadmapTopic,
+      editRoadmapTopic,
       deleteRoadmapTopic,
       toggleRoadmapTopic,
+      addRoadmapLevel,
+      editRoadmapLevel,
+      deleteRoadmapLevel,
+      reorderRoadmapLevels,
 
       // Custom habits CRUD
       createCustomActivity,
