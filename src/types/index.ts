@@ -42,6 +42,19 @@ export interface Goal {
   created_at?: string;
 }
 
+export interface TaskChecklistItem {
+  id: string;
+  title: string;
+  completed: boolean;
+  order: number;
+}
+
+export interface TaskCompletionRecord {
+  date: string; // YYYY-MM-DD
+  completed: boolean;
+  completed_at?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -51,6 +64,11 @@ export interface Task {
   due_date: string;
   status: 'complete' | 'incomplete';
   created_at?: string;
+  is_recurring?: boolean;
+  recurring_history?: TaskCompletionRecord[];
+  last_reset_date?: string;
+  checklist?: TaskChecklistItem[];
+  attachment_name?: string;
 }
 
 export interface Profile {

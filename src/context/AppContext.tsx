@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
-import type { Log, CustomActivity, Goals, Skill, SkillLevel, Badge, Milestone, StreakState, AppState, GoalTarget, Task, Profile, Goal } from '../types';
+import type { Log, CustomActivity, Goals, Skill, SkillLevel, Badge, Milestone, StreakState, AppState, GoalTarget, Task, TaskChecklistItem, TaskCompletionRecord, Profile, Goal } from '../types';
 import { getLocalDateString, parseLocalDate, getRelativeLocalDateString } from '../utils/date';
 import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
 
@@ -36,6 +36,7 @@ interface AppContextType extends AppState {
   updateTask: (id: string, task: Partial<Task>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
   toggleTaskStatus: (id: string) => Promise<void>;
+  updateTaskChecklist: (taskId: string, checklist: TaskChecklistItem[]) => Promise<void>;
   
   // Goal CRUD
   createGoal: (goal: Omit<Goal, 'id' | 'current_value' | 'is_archived'>) => Promise<void>;
@@ -303,7 +304,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
-      setTasks(tasksData || []);
+
+      const todayStr = getLocalDateString();
+      let hasResets = false;
+      const processedTasks: Task[] = (tasksData || []).map((t: any) => {
+        const isRecurring = !!t.is_recurring;
+        const lastReset = t.last_reset_date || (t.created_at ? t.created_at.split('T')[0] : todayStr);
+        let status = t.status || 'incomplete';
+        let checklist: TaskChecklistItem[] = Array.isArray(t.checklist) ? t.checklist : [];
+        let recurringHistory: TaskCompletionRecord[] = Array.isArray(t.recurring_history) ? t.recurring_history : [];
+
+        // Check if recurring task needs daily reset (new day has arrived)
+        if (isRecurring && lastReset < todayStr) {
+          hasResets = true;
+          // Preserve past day completion in recurring_history if completed
+          if (status === 'complete' && !recurringHistory.some(r => r.date === lastReset)) {
+            recurringHistory = [...recurringHistory, { date: lastReset, completed: true }];
+          }
+          // Reset status and checklist for the fresh day
+          status = 'incomplete';
+          checklist = checklist.map(item => ({ ...item, completed: false }));
+          return {
+            ...t,
+            is_recurring: true,
+            status,
+            due_date: todayStr,
+            last_reset_date: todayStr,
+            checklist,
+            recurring_history: recurringHistory
+          };
+        }
+
+        return {
+          ...t,
+          is_recurring: isRecurring,
+          status,
+          last_reset_date: lastReset,
+          checklist,
+          recurring_history: recurringHistory
+        };
+      });
+
+      setTasks(processedTasks);
+
+      // Asynchronously sync any daily-reset tasks back to Supabase
+      if (hasResets) {
+        processedTasks.forEach(async (task) => {
+          if (task.is_recurring && task.last_reset_date === todayStr && task.status === 'incomplete') {
+            try {
+              await supabase.from('tasks').update({
+                status: 'incomplete',
+                due_date: todayStr,
+                last_reset_date: todayStr,
+                checklist: task.checklist,
+                recurring_history: task.recurring_history
+              }).eq('id', task.id);
+            } catch (syncErr) {
+              console.warn('Could not sync daily task reset to cloud:', syncErr);
+            }
+          }
+        });
+      }
 
       // 3. Load goals
       const { data: goalsData } = await supabase
@@ -802,20 +863,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Task CRUD ---
   const addTask = async (t: Omit<Task, 'id'>) => {
     if (!user) return;
+    const todayStr = getLocalDateString();
+    const newTaskPayload = {
+      user_id: user.id,
+      title: t.title,
+      description: t.description || '',
+      category: t.category,
+      priority: t.priority,
+      due_date: t.due_date,
+      status: t.status || 'incomplete',
+      is_recurring: t.is_recurring ?? false,
+      recurring_history: t.recurring_history ?? [],
+      last_reset_date: t.last_reset_date ?? todayStr,
+      checklist: t.checklist ?? [],
+      attachment_name: t.attachment_name ?? null
+    };
+
+    let createdTask: Task | null = null;
     const { data, error } = await supabase
       .from('tasks')
-      .insert({ ...t, user_id: user.id })
+      .insert(newTaskPayload)
       .select()
       .single();
 
-    if (error) throw error;
-    setTasks(prev => [data, ...prev]);
-    
-    setToast({
-      title: 'Task Created',
-      message: `"${t.title}" registered successfully.`,
-      type: 'success'
-    });
+    if (error) {
+      // Fallback if Supabase table has not had tasks_feature_migration.sql run yet
+      if (error.message?.includes('column') || error.code === '42703') {
+        console.warn('tasks table missing new columns, storing base columns to database:', error.message);
+        const basePayload = {
+          user_id: user.id,
+          title: t.title,
+          description: t.description || '',
+          category: t.category,
+          priority: t.priority,
+          due_date: t.due_date,
+          status: t.status || 'incomplete'
+        };
+        const { data: fbData, error: fbErr } = await supabase
+          .from('tasks')
+          .insert(basePayload)
+          .select()
+          .single();
+        if (fbErr) throw fbErr;
+        createdTask = {
+          ...fbData,
+          is_recurring: t.is_recurring ?? false,
+          recurring_history: t.recurring_history ?? [],
+          last_reset_date: t.last_reset_date ?? todayStr,
+          checklist: t.checklist ?? [],
+          attachment_name: t.attachment_name ?? undefined
+        };
+      } else {
+        throw error;
+      }
+    } else {
+      createdTask = data;
+    }
+
+    if (createdTask) {
+      setTasks(prev => [createdTask!, ...prev]);
+      setToast({
+        title: t.is_recurring ? 'Daily Recurring Task Added' : 'Task Created',
+        message: `"${t.title}" registered successfully.`,
+        type: 'success'
+      });
+    }
   };
 
   const updateTask = async (id: string, updates: Partial<Task>) => {
@@ -825,12 +937,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .update(updates)
       .eq('id', id);
 
-    if (error) throw error;
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      const baseUpdates: any = {};
+      ['title', 'description', 'category', 'priority', 'due_date', 'status'].forEach(k => {
+        if (k in updates) baseUpdates[k] = (updates as any)[k];
+      });
+      await supabase.from('tasks').update(baseUpdates).eq('id', id);
+    }
+
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
 
     setToast({
       title: 'Task Updated',
-      message: 'Modifications saved to cloud database.',
+      message: 'Modifications saved successfully.',
       type: 'info'
     });
   };
@@ -858,20 +977,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!target) return;
 
     const nextStatus = target.status === 'complete' ? 'incomplete' : 'complete';
+    const todayStr = getLocalDateString();
     
+    let nextRecurringHistory = [...(target.recurring_history || [])];
+    let nextChecklist = target.checklist ? [...target.checklist] : [];
+
+    if (target.is_recurring) {
+      const existingIdx = nextRecurringHistory.findIndex(r => r.date === todayStr);
+      if (nextStatus === 'complete') {
+        if (existingIdx >= 0) {
+          nextRecurringHistory[existingIdx] = {
+            ...nextRecurringHistory[existingIdx],
+            completed: true,
+            completed_at: new Date().toISOString()
+          };
+        } else {
+          nextRecurringHistory.push({
+            date: todayStr,
+            completed: true,
+            completed_at: new Date().toISOString()
+          });
+        }
+        // When checking off the whole recurring task, mark all sub-items completed
+        nextChecklist = nextChecklist.map(c => ({ ...c, completed: true }));
+      } else {
+        if (existingIdx >= 0) {
+          nextRecurringHistory[existingIdx] = {
+            ...nextRecurringHistory[existingIdx],
+            completed: false
+          };
+        }
+      }
+    }
+
+    const updates: Partial<Task> = {
+      status: nextStatus,
+      recurring_history: nextRecurringHistory,
+      checklist: nextChecklist
+    };
+
     const { error } = await supabase
       .from('tasks')
-      .update({ status: nextStatus })
+      .update(updates)
       .eq('id', id);
 
-    if (error) throw error;
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: nextStatus } : t));
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      await supabase.from('tasks').update({ status: nextStatus }).eq('id', id);
+    }
+
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
 
     setToast({
-      title: nextStatus === 'complete' ? 'Task Checked Off! 🎉' : 'Task Reopened',
-      message: `"${target.title}" set to ${nextStatus}.`,
+      title: nextStatus === 'complete' ? (target.is_recurring ? 'Daily Habit Completed! 🔥' : 'Task Checked Off! 🎉') : 'Task Reopened',
+      message: `"${target.title}" marked as ${nextStatus}.`,
       type: nextStatus === 'complete' ? 'success' : 'info'
     });
+  };
+
+  const updateTaskChecklist = async (taskId: string, newChecklist: TaskChecklistItem[]) => {
+    if (!user) return;
+    const target = tasks.find(t => t.id === taskId);
+    if (!target) return;
+
+    const allDone = newChecklist.length > 0 && newChecklist.every(i => i.completed);
+    const hasPending = newChecklist.some(i => !i.completed);
+    
+    let nextStatus = target.status;
+    const todayStr = getLocalDateString();
+    let nextRecurringHistory = [...(target.recurring_history || [])];
+
+    if (allDone && target.status !== 'complete') {
+      nextStatus = 'complete';
+      if (target.is_recurring) {
+        const existingIdx = nextRecurringHistory.findIndex(r => r.date === todayStr);
+        if (existingIdx >= 0) {
+          nextRecurringHistory[existingIdx] = { ...nextRecurringHistory[existingIdx], completed: true };
+        } else {
+          nextRecurringHistory.push({ date: todayStr, completed: true, completed_at: new Date().toISOString() });
+        }
+      }
+    } else if (hasPending && target.status === 'complete') {
+      nextStatus = 'incomplete';
+      if (target.is_recurring) {
+        const existingIdx = nextRecurringHistory.findIndex(r => r.date === todayStr);
+        if (existingIdx >= 0) {
+          nextRecurringHistory[existingIdx] = { ...nextRecurringHistory[existingIdx], completed: false };
+        }
+      }
+    }
+
+    const updates: Partial<Task> = {
+      checklist: newChecklist,
+      status: nextStatus,
+      recurring_history: nextRecurringHistory
+    };
+
+    const { error } = await supabase
+      .from('tasks')
+      .update(updates)
+      .eq('id', taskId);
+
+    if (error && (error.message?.includes('column') || error.code === '42703')) {
+      if (nextStatus !== target.status) {
+        await supabase.from('tasks').update({ status: nextStatus }).eq('id', taskId);
+      }
+    }
+
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
   };
 
   // --- Goal CRUD ---
@@ -2031,6 +2243,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateTask,
       deleteTask,
       toggleTaskStatus,
+      updateTaskChecklist,
 
       // Goals CRUD
       createGoal,

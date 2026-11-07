@@ -73,6 +73,11 @@ CREATE TABLE public.tasks (
     priority TEXT NOT NULL CHECK (priority IN ('low', 'medium', 'high')),
     due_date DATE NOT NULL,
     status TEXT DEFAULT 'incomplete' NOT NULL CHECK (status IN ('complete', 'incomplete')),
+    is_recurring BOOLEAN DEFAULT FALSE,
+    recurring_history JSONB DEFAULT '[]'::jsonb,
+    last_reset_date DATE DEFAULT CURRENT_DATE,
+    checklist JSONB DEFAULT '[]'::jsonb,
+    attachment_name TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
