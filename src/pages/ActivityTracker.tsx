@@ -12,11 +12,9 @@ export const ActivityTracker: React.FC = () => {
   const { 
     logs, 
     customActivities, 
-    goals, 
     goalsList,
     addLog, 
     deleteLog, 
-    updateGoal, 
     createGoal,
     editGoal,
     deleteGoal,
@@ -37,28 +35,103 @@ export const ActivityTracker: React.FC = () => {
 
   // Goal config states
   const [goalPeriod, setGoalPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  
-  // Controlled goal values initialized
-  const [goalStudy, setGoalStudy] = useState(goals.daily.studyHours);
-  const [goalWorkout, setGoalWorkout] = useState(goals.daily.workoutMins);
-  const [goalReading, setGoalReading] = useState(goals.daily.readingMins);
-  const [goalLeetcode, setGoalLeetcode] = useState(goals.daily.leetcodeCount);
 
-  // Sync controlled state when context goals load or period changes
+  // Goals for the selected period (active / non-archived)
+  const periodGoals = useMemo(() => {
+    return goalsList.filter(g => g.period === goalPeriod && !g.is_archived);
+  }, [goalsList, goalPeriod]);
+
+  // Controlled goal target values keyed by goal ID
+  const [goalInputs, setGoalInputs] = useState<Record<string, number>>({});
+
   useEffect(() => {
-    setGoalStudy(goals[goalPeriod].studyHours);
-    setGoalWorkout(goals[goalPeriod].workoutMins);
-    setGoalReading(goals[goalPeriod].readingMins);
-    setGoalLeetcode(goals[goalPeriod].leetcodeCount);
-  }, [goals, goalPeriod]);
+    setGoalInputs(prev => {
+      const next = { ...prev };
+      periodGoals.forEach(g => {
+        if (next[g.id] === undefined) {
+          next[g.id] = Number(g.target_value) || 0;
+        }
+      });
+      return next;
+    });
+  }, [periodGoals]);
 
-  // Visual validations bounds feedback
-  const goalStudyError = goalStudy < 0 || goalStudy > 24 ? "Must be between 0 and 24 hours" : null;
-  const goalWorkoutError = goalWorkout < 0 || goalWorkout > 1440 ? "Must be between 0 and 1440 minutes" : null;
-  const goalReadingError = goalReading < 0 || goalReading > 1440 ? "Must be between 0 and 1440 minutes" : null;
-  const goalLeetcodeError = goalLeetcode < 0 ? "Must be 0 or more" : null;
+  const handleGoalInputChange = (id: string, val: number) => {
+    setGoalInputs(prev => ({
+      ...prev,
+      [id]: val
+    }));
+  };
 
-  const hasGoalErrors = !!(goalStudyError || goalWorkoutError || goalReadingError || goalLeetcodeError);
+  const getGoalValidationError = (goal: Goal) => {
+    const val = goalInputs[goal.id] !== undefined ? goalInputs[goal.id] : Number(goal.target_value);
+    if (val < 0) return "Must be 0 or more";
+    if (goal.unit === 'hrs' && val > 24) return "Must be between 0 and 24 hours";
+    if (goal.unit === 'mins' && val > 1440) return "Must be between 0 and 1440 minutes";
+    return null;
+  };
+
+  const hasAnyGoalErrors = useMemo(() => {
+    return periodGoals.some(g => !!getGoalValidationError(g));
+  }, [periodGoals, goalInputs]);
+
+  // Delete goal state with confirmation
+  const [goalToDelete, setGoalToDelete] = useState<Goal | null>(null);
+
+  const confirmDeleteGoal = async () => {
+    if (!goalToDelete) return;
+    await deleteGoal(goalToDelete.id);
+    setGoalToDelete(null);
+  };
+
+  // Add Goal modal state
+  const [isAddingGoal, setIsAddingGoal] = useState(false);
+  const [addGoalTitle, setAddGoalTitle] = useState('');
+  const [addGoalTargetField, setAddGoalTargetField] = useState('studyHours');
+  const [addGoalUnit, setAddGoalUnit] = useState('hrs');
+  const [addGoalTargetValue, setAddGoalTargetValue] = useState(4);
+  const [addGoalPeriod, setAddGoalPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+
+  const handleOpenAddGoal = () => {
+    setAddGoalPeriod(goalPeriod);
+    setAddGoalTitle('');
+    setAddGoalTargetField('studyHours');
+    setAddGoalUnit('hrs');
+    setAddGoalTargetValue(4);
+    setIsAddingGoal(true);
+  };
+
+  const handleAddGoalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addGoalTitle.trim() || addGoalTargetValue < 0) return;
+    await createGoal({
+      title: addGoalTitle.trim(),
+      target_value: Number(addGoalTargetValue),
+      unit: addGoalUnit.trim() || 'hrs',
+      period: addGoalPeriod,
+      target_field: addGoalTargetField
+    });
+    setAddGoalTitle('');
+    setIsAddingGoal(false);
+  };
+
+  const getGoalIcon = (goal: Goal) => {
+    const f = (goal.target_field || '').toLowerCase();
+    const t = (goal.title || '').toLowerCase();
+    if (f === 'studyhours' || t.includes('study')) {
+      return <BookOpen size={12} className="text-[#00f2fe] shrink-0" />;
+    }
+    if (f === 'workoutmins' || t.includes('workout') || t.includes('fit') || t.includes('gym')) {
+      return <Clock size={12} className="text-[#e100ff] shrink-0" />;
+    }
+    if (f === 'readingmins' || t.includes('read') || t.includes('book')) {
+      return <Target size={12} className="text-[#ff4769] shrink-0" />;
+    }
+    if (f === 'leetcodecount' || t.includes('leet') || t.includes('dsa') || t.includes('code')) {
+      return <Binary size={12} className="text-[#f6d365] shrink-0" />;
+    }
+    return <Target size={12} className="text-[#00b09b] shrink-0" />;
+  };
 
   // Custom activity states
   const [customName, setCustomName] = useState('');
@@ -121,13 +194,15 @@ export const ActivityTracker: React.FC = () => {
   };
 
   // Submit Goal updates
-  const handleGoalSubmit = (e: React.FormEvent) => {
+  const handleGoalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (hasGoalErrors) return;
-    updateGoal(goalPeriod, 'studyHours', goalStudy);
-    updateGoal(goalPeriod, 'workoutMins', goalWorkout);
-    updateGoal(goalPeriod, 'readingMins', goalReading);
-    updateGoal(goalPeriod, 'leetcodeCount', goalLeetcode);
+    if (hasAnyGoalErrors) return;
+    for (const goal of periodGoals) {
+      const newVal = goalInputs[goal.id] !== undefined ? goalInputs[goal.id] : Number(goal.target_value);
+      if (newVal !== Number(goal.target_value)) {
+        await editGoal(goal.id, { target_value: newVal });
+      }
+    }
   };
 
   // Toggle Goal periods to populate inputs
@@ -158,45 +233,6 @@ export const ActivityTracker: React.FC = () => {
     setNewGoalTitle('');
     setNewGoalValue(10);
   };
-
-  // Helper calculations for active goals progression and remaining target computations
-  const currentProgression = useMemo(() => {
-    const now = new Date();
-    let periodLogs = [];
-
-    if (goalPeriod === 'daily') {
-      const todayStr = getLocalDateString(now);
-      periodLogs = logs.filter(l => l.date === todayStr);
-    } else if (goalPeriod === 'weekly') {
-      const lastWeek = new Date();
-      lastWeek.setDate(now.getDate() - 7);
-      periodLogs = logs.filter(l => parseLocalDate(l.date) >= lastWeek);
-    } else {
-      const lastMonth = new Date();
-      lastMonth.setDate(now.getDate() - 30);
-      periodLogs = logs.filter(l => parseLocalDate(l.date) >= lastMonth);
-    }
-
-    const study = periodLogs
-      .filter(l => l.type === 'study' || l.type === 'react' || l.type === 'dsa' || l.type === 'dbms' || l.type === 'aptitude' || l.type === 'communication' || !!skills[l.type])
-      .reduce((sum, l) => sum + (l.unit === 'hrs' ? Number(l.amount) : 0), 0);
-
-    const workout = periodLogs
-      .filter(l => l.type === 'workout')
-      .reduce((sum, l) => sum + Number(l.amount), 0);
-
-    const reading = periodLogs
-      .filter(l => l.type === 'reading')
-      .reduce((sum, l) => sum + Number(l.amount), 0);
-
-    const leetcode = periodLogs
-      .filter(l => l.type === 'dsa')
-      .reduce((sum, l) => sum + Number(l.amount), 0);
-
-    return { study, workout, reading, leetcode };
-  }, [logs, goalPeriod, skills]);
-
-  const targetGoals = goals[goalPeriod];
 
   // Helper to dynamically calculate current value of ANY goal from user activity logs
   const getGoalProgress = (goal: Goal) => {
@@ -331,163 +367,138 @@ export const ActivityTracker: React.FC = () => {
 
         {/* Goals Configuration Form */}
         <GlassCard>
-          <div className="mb-6 flex justify-between items-center">
+          <div className="mb-6 flex justify-between items-center gap-2">
             <div>
               <h3 className="font-heading font-bold text-lg text-slate-100">Goals Manager</h3>
               <span className="text-xs text-slate-500">Configure target metrics and trackers</span>
             </div>
-            <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl">
-              {(['daily', 'weekly', 'monthly'] as const).map(p => (
-                <button
-                  key={p}
-                  onClick={() => handlePeriodChange(p)}
-                  className={`
-                    text-[10px] font-bold uppercase py-1 px-2.5 rounded-lg transition-colors
-                    ${goalPeriod === p ? 'bg-[#00f2fe] text-slate-900' : 'text-slate-400 hover:text-white'}
-                  `}
-                >
-                  {p}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="flex gap-1.5 bg-white/5 p-1 rounded-xl">
+                {(['daily', 'weekly', 'monthly'] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => handlePeriodChange(p)}
+                    className={`
+                      text-[10px] font-bold uppercase py-1 px-2.5 rounded-lg transition-colors cursor-pointer
+                      ${goalPeriod === p ? 'bg-[#00f2fe] text-slate-900' : 'text-slate-400 hover:text-white'}
+                    `}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenAddGoal}
+                className="flex items-center gap-1 text-[10px] font-bold uppercase py-1 px-2.5 rounded-lg bg-[#00f2fe]/10 hover:bg-[#00f2fe]/20 text-[#00f2fe] border border-[#00f2fe]/30 transition-all cursor-pointer shadow-[0_0_10px_rgba(0,242,254,0.15)]"
+                title="Add new goal"
+              >
+                <Plus size={12} />
+                <span>Add Goal</span>
+              </button>
             </div>
           </div>
 
           {/* Goal Targets Dashboard progress and Remaining targets calculation */}
-          <div className="grid grid-cols-2 gap-4 mb-6 text-xs bg-white/2 border border-white/5 p-3 rounded-xl">
-            <div>
-              <span className="text-slate-500 block">Study Remaining</span>
-              <span className="text-slate-200 font-semibold font-heading block mt-0.5">
-                {Math.max(0, targetGoals.studyHours - currentProgression.study).toFixed(1)} hrs left
-              </span>
-            </div>
-            <div>
-              <span className="text-slate-500 block">Workout Remaining</span>
-              <span className="text-slate-200 font-semibold font-heading block mt-0.5">
-                {Math.max(0, targetGoals.workoutMins - currentProgression.workout)} mins left
-              </span>
-            </div>
-            <div className="mt-2">
-              <span className="text-slate-500 block">Reading Remaining</span>
-              <span className="text-slate-200 font-semibold font-heading block mt-0.5">
-                {Math.max(0, targetGoals.readingMins - currentProgression.reading)} mins left
-              </span>
-            </div>
-            <div className="mt-2">
-              <span className="text-slate-500 block">LeetCode Target left</span>
-              <span className="text-slate-200 font-semibold font-heading block mt-0.5">
-                {Math.max(0, targetGoals.leetcodeCount - currentProgression.leetcode)} left
-              </span>
-            </div>
+          <div className="grid grid-cols-2 gap-4 mb-6 text-xs bg-white/2 border border-white/5 p-3 rounded-xl max-h-48 overflow-y-auto">
+            {periodGoals.length === 0 ? (
+              <div className="col-span-2 text-center text-slate-500 py-1">
+                No active targets for {goalPeriod} period. Click "+ Add Goal" to add one.
+              </div>
+            ) : (
+              periodGoals.map(goal => {
+                const currentVal = getGoalProgress(goal);
+                const targetVal = goalInputs[goal.id] !== undefined ? goalInputs[goal.id] : Number(goal.target_value);
+                const remaining = Math.max(0, targetVal - currentVal);
+                return (
+                  <div key={goal.id} className="min-w-0">
+                    <span className="text-slate-500 block truncate" title={`${goal.title} Remaining`}>
+                      {goal.title} Remaining
+                    </span>
+                    <span className="text-slate-200 font-semibold font-heading block mt-0.5 truncate">
+                      {goal.unit === 'hrs' ? remaining.toFixed(1) : remaining} {goal.unit} left
+                    </span>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           <form onSubmit={handleGoalSubmit} className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-4">
-              
-              {/* Study Hours Controlled Input */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                  <BookOpen size={12} />
-                  <span>Study Hours</span>
-                </label>
-                <input 
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max="24"
-                  placeholder="0"
-                  value={goalStudy === 0 ? '' : goalStudy}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setGoalStudy(isNaN(val) ? 0 : val);
-                  }}
-                  className={`bg-white/3 border rounded-xl py-2 px-3 text-slate-100 text-xs outline-none transition-colors ${
-                    goalStudyError ? 'border-red-500/50 focus:border-red-500' : 'border-white/8 focus:border-[#00f2fe]/40'
-                  }`}
-                />
-                {goalStudyError && <span className="text-[9px] text-red-400 font-semibold leading-none">{goalStudyError}</span>}
+            {periodGoals.length === 0 ? (
+              <div className="text-center py-6 border border-dashed border-white/10 rounded-xl">
+                <Target size={28} className="text-slate-600 mx-auto mb-2 stroke-1" />
+                <span className="text-xs text-slate-400 block font-semibold">No goals in this period</span>
+                <p className="text-[10px] text-slate-500 mt-1 mb-3">Add goals dynamically to start tracking your targets.</p>
+                <button
+                  type="button"
+                  onClick={handleOpenAddGoal}
+                  className="py-1.5 px-3 bg-[#00f2fe]/10 hover:bg-[#00f2fe]/20 text-[#00f2fe] border border-[#00f2fe]/30 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Plus size={13} />
+                  <span>Add Goal</span>
+                </button>
               </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto pr-1">
+                {periodGoals.map(goal => {
+                  const error = getGoalValidationError(goal);
+                  const currentVal = goalInputs[goal.id] !== undefined ? goalInputs[goal.id] : Number(goal.target_value);
 
-              {/* Workout Minutes Controlled Input */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                  <Clock size={12} />
-                  <span>Workout Mins</span>
-                </label>
-                <input 
-                  type="number"
-                  min="0"
-                  max="1440"
-                  placeholder="0"
-                  value={goalWorkout === 0 ? '' : goalWorkout}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setGoalWorkout(isNaN(val) ? 0 : val);
-                  }}
-                  className={`bg-white/3 border rounded-xl py-2 px-3 text-slate-100 text-xs outline-none transition-colors ${
-                    goalWorkoutError ? 'border-red-500/50 focus:border-red-500' : 'border-white/8 focus:border-[#00f2fe]/40'
-                  }`}
-                />
-                {goalWorkoutError && <span className="text-[9px] text-red-400 font-semibold leading-none">{goalWorkoutError}</span>}
+                  return (
+                    <div key={goal.id} className="flex flex-col gap-1.5 group">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1 truncate" title={goal.title}>
+                          {getGoalIcon(goal)}
+                          <span className="truncate">{goal.title}</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setGoalToDelete(goal)}
+                          className="text-slate-500 hover:text-red-400 p-0.5 rounded transition-colors opacity-70 hover:opacity-100 cursor-pointer"
+                          title={`Delete ${goal.title}`}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                      <input 
+                        type="number"
+                        step={goal.unit === 'hrs' ? "0.5" : "1"}
+                        min="0"
+                        max={goal.unit === 'hrs' ? 24 : 1440}
+                        placeholder="0"
+                        value={currentVal === 0 ? '' : currentVal}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          handleGoalInputChange(goal.id, isNaN(val) ? 0 : val);
+                        }}
+                        className={`bg-white/3 border rounded-xl py-2 px-3 text-slate-100 text-xs outline-none transition-colors ${
+                          error ? 'border-red-500/50 focus:border-red-500' : 'border-white/8 focus:border-[#00f2fe]/40'
+                        }`}
+                      />
+                      {error && (
+                        <span className="text-[9px] text-red-400 font-semibold leading-none">{error}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+            )}
 
-              {/* Reading Minutes Controlled Input */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                  <Target size={12} />
-                  <span>Reading Mins</span>
-                </label>
-                <input 
-                  type="number"
-                  min="0"
-                  max="1440"
-                  placeholder="0"
-                  value={goalReading === 0 ? '' : goalReading}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setGoalReading(isNaN(val) ? 0 : val);
-                  }}
-                  className={`bg-white/3 border rounded-xl py-2 px-3 text-slate-100 text-xs outline-none transition-colors ${
-                    goalReadingError ? 'border-red-500/50 focus:border-red-500' : 'border-white/8 focus:border-[#00f2fe]/40'
-                  }`}
-                />
-                {goalReadingError && <span className="text-[9px] text-red-400 font-semibold leading-none">{goalReadingError}</span>}
-              </div>
-
-              {/* LeetCode count Controlled Input */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                  <Binary size={12} />
-                  <span>LeetCode count</span>
-                </label>
-                <input 
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={goalLeetcode === 0 ? '' : goalLeetcode}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setGoalLeetcode(isNaN(val) ? 0 : val);
-                  }}
-                  className={`bg-white/3 border rounded-xl py-2 px-3 text-slate-100 text-xs outline-none transition-colors ${
-                    goalLeetcodeError ? 'border-red-500/50 focus:border-red-500' : 'border-white/8 focus:border-[#00f2fe]/40'
-                  }`}
-                />
-                {goalLeetcodeError && <span className="text-[9px] text-red-400 font-semibold leading-none">{goalLeetcodeError}</span>}
-              </div>
-            </div>
-
-            <button 
-              type="submit"
-              disabled={hasGoalErrors}
-              className={`mt-2 w-full py-2.5 border text-xs font-heading font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 ${
-                hasGoalErrors 
-                  ? 'bg-red-500/10 border-red-500/20 text-red-400 cursor-not-allowed' 
-                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-white'
-              }`}
-            >
-              <Settings size={14} />
-              <span>Update Targets</span>
-            </button>
+            {periodGoals.length > 0 && (
+              <button 
+                type="submit"
+                disabled={hasAnyGoalErrors}
+                className={`mt-2 w-full py-2.5 border text-xs font-heading font-semibold rounded-xl transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
+                  hasAnyGoalErrors 
+                    ? 'bg-red-500/10 border-red-500/20 text-red-400 cursor-not-allowed' 
+                    : 'bg-white/5 hover:bg-white/10 border-white/10 text-white hover:border-[#00f2fe]/30'
+                }`}
+              >
+                <Settings size={14} />
+                <span>Update Targets</span>
+              </button>
+            )}
           </form>
         </GlassCard>
 
@@ -924,6 +935,162 @@ export const ActivityTracker: React.FC = () => {
         )}
 
       </div>
+
+      {/* Delete Goal Confirmation Modal */}
+      {goalToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0f1627] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+            <h4 className="font-heading font-bold text-base text-slate-100 mb-2">Delete Goal?</h4>
+            <p className="text-xs text-slate-400 mb-6 leading-relaxed">
+              Are you sure you want to delete <span className="text-white font-semibold">"{goalToDelete.title}"</span>? This will permanently remove this goal target from your {goalToDelete.period} tracker.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setGoalToDelete(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteGoal}
+                className="px-4 py-2 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)] cursor-pointer"
+              >
+                Delete Goal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Goal Modal */}
+      {isAddingGoal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#0f1627] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-heading font-bold text-base text-slate-100">Add Goal Target</h4>
+                <span className="text-[11px] text-slate-500">Create a dynamic goal for your {addGoalPeriod} tracker</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddingGoal(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddGoalSubmit} className="flex flex-col gap-3.5">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Goal Title</label>
+                <input
+                  type="text"
+                  placeholder="E.g. Study React Hooks, Pushups, Deep Work"
+                  value={addGoalTitle}
+                  onChange={(e) => setAddGoalTitle(e.target.value)}
+                  className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-slate-100 text-xs outline-none focus:border-[#00f2fe]/40 placeholder-slate-600 w-full"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Metric Source</label>
+                  <select
+                    value={addGoalTargetField}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setAddGoalTargetField(val);
+                      if (val === 'studyHours') setAddGoalUnit('hrs');
+                      else if (val === 'leetcodeCount') setAddGoalUnit('solved');
+                      else if (val === 'workoutMins' || val === 'readingMins') setAddGoalUnit('mins');
+                      else {
+                        const cust = customActivities.find(c => c.id === val);
+                        if (cust) setAddGoalUnit(cust.unit);
+                      }
+                    }}
+                    className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-slate-100 text-xs outline-none focus:border-[#00f2fe]/40 w-full"
+                  >
+                    <option value="studyHours" className="bg-[#060913]">General Study (hrs)</option>
+                    <option value="workoutMins" className="bg-[#060913]">Workout (mins)</option>
+                    <option value="readingMins" className="bg-[#060913]">Reading (mins)</option>
+                    <option value="leetcodeCount" className="bg-[#060913]">DSA / LeetCode (solved)</option>
+                    {customActivities.map(act => (
+                      <option key={act.id} value={act.id} className="bg-[#060913]">
+                        {act.name} ({act.unit})
+                      </option>
+                    ))}
+                    <option value="custom" className="bg-[#060913]">Custom Activity</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Tracking Period</label>
+                  <select
+                    value={addGoalPeriod}
+                    onChange={(e) => setAddGoalPeriod(e.target.value as any)}
+                    className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-slate-100 text-xs outline-none focus:border-[#00f2fe]/40 w-full"
+                  >
+                    <option value="daily" className="bg-[#060913]">Daily</option>
+                    <option value="weekly" className="bg-[#060913]">Weekly</option>
+                    <option value="monthly" className="bg-[#060913]">Monthly</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Target Value</label>
+                  <input
+                    type="number"
+                    step={addGoalUnit === 'hrs' ? "0.5" : "1"}
+                    min="0"
+                    placeholder="10"
+                    value={addGoalTargetValue === 0 ? '' : addGoalTargetValue}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setAddGoalTargetValue(isNaN(val) ? 0 : val);
+                    }}
+                    className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-slate-100 text-xs outline-none focus:border-[#00f2fe]/40 w-full"
+                    required
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Unit</label>
+                  <input
+                    type="text"
+                    placeholder="hrs, mins, etc."
+                    value={addGoalUnit}
+                    onChange={(e) => setAddGoalUnit(e.target.value)}
+                    className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-slate-100 text-xs outline-none focus:border-[#00f2fe]/40 w-full"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-3 pt-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingGoal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-heading font-semibold text-slate-900 bg-gradient-to-r from-[#00f2fe] to-[#4facfe] rounded-xl hover:shadow-[0_0_15px_rgba(0,242,254,0.4)] transition-all cursor-pointer"
+                >
+                  Save Goal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

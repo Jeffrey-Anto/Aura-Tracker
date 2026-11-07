@@ -311,7 +311,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: true });
-      const dbGoals = goalsData || [];
+      let dbGoals = goalsData || [];
+
+      // If user has no goals stored yet and hasn't explicitly initialized, seed the default 4 goals
+      if (dbGoals.length === 0 && !localStorage.getItem('aura_goals_initialized_' + userId)) {
+        const defaultGoalsToInsert = [
+          { user_id: userId, title: 'Study Hours', target_value: 4, unit: 'hrs', period: 'daily', target_field: 'studyHours' },
+          { user_id: userId, title: 'Workout Mins', target_value: 30, unit: 'mins', period: 'daily', target_field: 'workoutMins' },
+          { user_id: userId, title: 'Reading Mins', target_value: 20, unit: 'mins', period: 'daily', target_field: 'readingMins' },
+          { user_id: userId, title: 'LeetCode count', target_value: 3, unit: 'solved', period: 'daily', target_field: 'leetcodeCount' }
+        ];
+        const { data: insertedGoals } = await supabase
+          .from('goals')
+          .insert(defaultGoalsToInsert)
+          .select();
+        if (insertedGoals && insertedGoals.length > 0) {
+          dbGoals = insertedGoals;
+        }
+        localStorage.setItem('aura_goals_initialized_' + userId, 'true');
+      }
+
       setGoalsList(dbGoals);
 
       // Map to legacy Goals object format
