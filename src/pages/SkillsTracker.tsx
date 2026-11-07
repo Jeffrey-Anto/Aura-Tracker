@@ -1,8 +1,29 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldAlert, ChevronDown, ChevronUp, CheckSquare, Square, Plus, Award, GitBranch, Map, Trash2, Edit2, ArrowUp, ArrowDown, Check, X } from 'lucide-react';
+import { 
+  ShieldAlert, 
+  ChevronDown, 
+  ChevronUp, 
+  CheckSquare, 
+  Square, 
+  Plus, 
+  Award, 
+  GitBranch, 
+  Map, 
+  Trash2, 
+  Edit2, 
+  ArrowUp, 
+  ArrowDown, 
+  Check, 
+  X,
+  Sparkles,
+  Paperclip,
+  RotateCcw,
+  Loader2
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { GlassCard } from '../components/GlassCard';
+import { generateRoadmapFromPrompt, generateRoadmapFromFile, type GeneratedRoadmapResponse } from '../utils/gemini';
 
 export const SkillsTracker: React.FC = () => {
   const { 
@@ -27,10 +48,29 @@ export const SkillsTracker: React.FC = () => {
   // Expanded states for roadmap accordions (level numbers)
   const [expandedLevels, setExpandedLevels] = useState<Record<number, boolean>>({});
 
-  // Create Skill states
+  // Create Skill states (Manual mode)
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillColor, setNewSkillColor] = useState('primary');
   const [newSkillTemplate, setNewSkillTemplate] = useState('empty');
+
+  // Creation Mode: 'manual' | 'ai-prompt' | 'upload'
+  const [creationMode, setCreationMode] = useState<'manual' | 'ai-prompt' | 'upload'>('manual');
+  
+  // AI Prompt Mode state
+  const [aiPrompt, setAiPrompt] = useState('');
+  
+  // File Upload Mode state
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  // Common AI loading & error state
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Preview Modal state
+  const [previewRoadmap, setPreviewRoadmap] = useState<GeneratedRoadmapResponse | null>(null);
+  const [previewSkillName, setPreviewSkillName] = useState('');
+  const [previewSkillColor, setPreviewSkillColor] = useState('primary');
+  const [isSavingRoadmap, setIsSavingRoadmap] = useState(false);
 
   // Add Level states
   const [isCreatingLevel, setIsCreatingLevel] = useState(false);
@@ -89,11 +129,113 @@ export const SkillsTracker: React.FC = () => {
     }));
   };
 
-  const handleCreateSkill = (e: React.FormEvent) => {
+  const handleCreateSkill = async (e: React.FormEvent) => {
     e.preventDefault();
-    createSkill(newSkillName, newSkillColor, newSkillTemplate);
+    if (!newSkillName.trim()) return;
+    const createdSlug = await createSkill(newSkillName.trim(), newSkillColor, newSkillTemplate);
+    if (createdSlug) {
+      setActiveSkillId(createdSlug);
+    }
     setNewSkillName('');
     setNewSkillTemplate('empty');
+  };
+
+  const handleGenerateFromPrompt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiPrompt.trim()) return;
+    setIsAiGenerating(true);
+    setAiError(null);
+
+    try {
+      const res = await generateRoadmapFromPrompt(aiPrompt.trim());
+      setPreviewRoadmap(res);
+      setPreviewSkillName(res.skillName);
+      setPreviewSkillColor(newSkillColor);
+    } catch (err: any) {
+      setAiError(err.message || 'Error generating roadmap');
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
+  const handleGenerateFromFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadedFile) return;
+    setIsAiGenerating(true);
+    setAiError(null);
+
+    try {
+      const res = await generateRoadmapFromFile(uploadedFile);
+      setPreviewRoadmap(res);
+      setPreviewSkillName(res.skillName);
+      setPreviewSkillColor(newSkillColor);
+    } catch (err: any) {
+      setAiError(err.message || 'Error analyzing document');
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
+  const handleRegenerateRoadmap = async () => {
+    setIsAiGenerating(true);
+    setAiError(null);
+
+    try {
+      let res: GeneratedRoadmapResponse;
+      if (creationMode === 'upload' && uploadedFile) {
+        res = await generateRoadmapFromFile(uploadedFile);
+      } else {
+        res = await generateRoadmapFromPrompt(aiPrompt.trim() || previewSkillName);
+      }
+      setPreviewRoadmap(res);
+      setPreviewSkillName(res.skillName);
+    } catch (err: any) {
+      setAiError(err.message || 'Error regenerating roadmap');
+    } finally {
+      setIsAiGenerating(false);
+    }
+  };
+
+  const handleConfirmSaveRoadmap = async () => {
+    if (!previewRoadmap || !previewSkillName.trim()) return;
+    setIsSavingRoadmap(true);
+
+    try {
+      const customLevels = previewRoadmap.levels.map(lvl => ({
+        level_number: lvl.levelNumber,
+        name: lvl.name
+      }));
+
+      const customRoadmap: { level: number; topic: string }[] = [];
+      previewRoadmap.levels.forEach(lvl => {
+        lvl.topics.forEach(t => {
+          customRoadmap.push({
+            level: lvl.levelNumber,
+            topic: t
+          });
+        });
+      });
+
+      const createdSlug = await createSkill(
+        previewSkillName.trim(),
+        previewSkillColor,
+        'custom',
+        customRoadmap,
+        customLevels
+      );
+
+      if (createdSlug) {
+        setActiveSkillId(createdSlug);
+      }
+
+      setPreviewRoadmap(null);
+      setAiPrompt('');
+      setUploadedFile(null);
+    } catch (err: any) {
+      console.error('Error saving roadmap:', err);
+    } finally {
+      setIsSavingRoadmap(false);
+    }
   };
 
   const handleAddLevelSubmit = (e: React.FormEvent) => {
@@ -244,63 +386,239 @@ export const SkillsTracker: React.FC = () => {
             )}
           </div>
 
-          {/* Create custom skill form */}
+          {/* Create skill & roadmap panel */}
           <GlassCard className="mt-4 border-dashed">
-            <h4 className="font-heading font-bold text-sm text-slate-200 mb-3 flex items-center gap-1.5">
-              <Plus size={16} />
-              <span>Create Skill Profile</span>
-            </h4>
-            <form onSubmit={handleCreateSkill} className="flex flex-col gap-3">
-              <input 
-                type="text"
-                placeholder="E.g. System Design, NodeJS"
-                value={newSkillName}
-                onChange={(e) => setNewSkillName(e.target.value)}
-                className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-xs text-slate-100 outline-none focus:border-[#00f2fe]/40 placeholder-slate-600 w-full"
-                required
-              />
-              
-              <div className="flex flex-col gap-1.5 mt-1">
-                <label className="text-[10px] font-semibold text-slate-400">Roadmap Template</label>
-                <select
-                  value={newSkillTemplate}
-                  onChange={(e) => setNewSkillTemplate(e.target.value)}
-                  className="bg-white/3 border border-white/8 rounded-xl py-2 px-2 text-xs text-slate-100 outline-none"
-                >
-                  <option value="empty" className="bg-[#060913]">Empty Roadmap (Add levels later)</option>
-                  <option value="react" className="bg-[#060913]">React (15 frontend topics)</option>
-                  <option value="dsa" className="bg-[#060913]">DSA (15 algorithmic topics)</option>
-                  <option value="aptitude" className="bg-[#060913]">Aptitude (15 math & logic topics)</option>
-                  <option value="dbms" className="bg-[#060913]">DBMS (15 database topics)</option>
-                  <option value="os" className="bg-[#060913]">Operating Systems (15 hardware topics)</option>
-                </select>
-              </div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-heading font-bold text-sm text-slate-200 flex items-center gap-1.5">
+                <Plus size={16} />
+                <span>Create Skill & Roadmap</span>
+              </h4>
+            </div>
 
-              <div className="flex gap-2 my-1.5">
-                {(['primary', 'secondary', 'accent', 'gold', 'success'] as const).map(color => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setNewSkillColor(color)}
-                    className={`
-                      w-5 h-5 rounded-full border-2 transition-all
-                      ${color === 'primary' ? 'bg-[#00f2fe]' : ''}
-                      ${color === 'secondary' ? 'bg-[#e100ff]' : ''}
-                      ${color === 'accent' ? 'bg-[#ff4769]' : ''}
-                      ${color === 'gold' ? 'bg-[#f6d365]' : ''}
-                      ${color === 'success' ? 'bg-[#00b09b]' : ''}
-                      ${newSkillColor === color ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.4)]' : 'border-transparent'}
-                    `}
-                  />
-                ))}
-              </div>
-              <button 
-                type="submit"
-                className="w-full py-2 bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-slate-900 font-heading font-semibold text-xs rounded-xl"
+            {/* Creation Mode Tabs */}
+            <div className="flex bg-white/4 p-1 rounded-xl gap-1 mb-3.5">
+              <button
+                type="button"
+                onClick={() => { setCreationMode('manual'); setAiError(null); }}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                  creationMode === 'manual' 
+                    ? 'bg-[#00f2fe] text-slate-900 shadow-[0_0_10px_rgba(0,242,254,0.3)]' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
               >
-                Create Skill
+                Manual
               </button>
-            </form>
+              <button
+                type="button"
+                onClick={() => { setCreationMode('ai-prompt'); setAiError(null); }}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                  creationMode === 'ai-prompt' 
+                    ? 'bg-gradient-to-r from-[#e100ff] to-[#7f00ff] text-white shadow-[0_0_10px_rgba(225,0,255,0.3)]' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Sparkles size={11} />
+                <span>AI Prompt</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCreationMode('upload'); setAiError(null); }}
+                className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                  creationMode === 'upload' 
+                    ? 'bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-slate-900 shadow-[0_0_10px_rgba(0,242,254,0.3)]' 
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Paperclip size={11} />
+                <span>Upload File</span>
+              </button>
+            </div>
+
+            {/* Mode 1: Manual Creation (Existing Workflow) */}
+            {creationMode === 'manual' && (
+              <form onSubmit={handleCreateSkill} className="flex flex-col gap-3">
+                <input 
+                  type="text"
+                  placeholder="E.g. System Design, NodeJS"
+                  value={newSkillName}
+                  onChange={(e) => setNewSkillName(e.target.value)}
+                  className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-xs text-slate-100 outline-none focus:border-[#00f2fe]/40 placeholder-slate-600 w-full"
+                  required
+                />
+                
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <label className="text-[10px] font-semibold text-slate-400">Roadmap Template</label>
+                  <select
+                    value={newSkillTemplate}
+                    onChange={(e) => setNewSkillTemplate(e.target.value)}
+                    className="bg-white/3 border border-white/8 rounded-xl py-2 px-2 text-xs text-slate-100 outline-none cursor-pointer"
+                  >
+                    <option value="empty" className="bg-[#060913]">Empty Roadmap (Add levels later)</option>
+                    <option value="react" className="bg-[#060913]">React (15 frontend topics)</option>
+                    <option value="dsa" className="bg-[#060913]">DSA (15 algorithmic topics)</option>
+                    <option value="aptitude" className="bg-[#060913]">Aptitude (15 math & logic topics)</option>
+                    <option value="dbms" className="bg-[#060913]">DBMS (15 database topics)</option>
+                    <option value="os" className="bg-[#060913]">Operating Systems (15 hardware topics)</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2 my-1.5 items-center">
+                  {(['primary', 'secondary', 'accent', 'gold', 'success'] as const).map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewSkillColor(color)}
+                      className={`
+                        w-5 h-5 rounded-full border-2 transition-all cursor-pointer
+                        ${color === 'primary' ? 'bg-[#00f2fe]' : ''}
+                        ${color === 'secondary' ? 'bg-[#e100ff]' : ''}
+                        ${color === 'accent' ? 'bg-[#ff4769]' : ''}
+                        ${color === 'gold' ? 'bg-[#f6d365]' : ''}
+                        ${color === 'success' ? 'bg-[#00b09b]' : ''}
+                        ${newSkillColor === color ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.4)]' : 'border-transparent'}
+                      `}
+                    />
+                  ))}
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-2 bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-slate-900 font-heading font-semibold text-xs rounded-xl shadow-[0_0_15px_rgba(0,242,254,0.3)] hover:scale-[1.01] transition-all cursor-pointer"
+                >
+                  Create Skill
+                </button>
+              </form>
+            )}
+
+            {/* Mode 2: AI Prompt-Based Creation */}
+            {creationMode === 'ai-prompt' && (
+              <form onSubmit={handleGenerateFromPrompt} className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-400">Describe What You Want to Learn</label>
+                  <input 
+                    type="text"
+                    placeholder="E.g. React roadmap, Golang backend, Kubernetes..."
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    className="bg-white/3 border border-white/8 rounded-xl py-2 px-3 text-xs text-slate-100 outline-none focus:border-[#e100ff]/50 placeholder-slate-600 w-full"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-2 my-1 items-center">
+                  <span className="text-[10px] text-slate-500 mr-1">Color:</span>
+                  {(['primary', 'secondary', 'accent', 'gold', 'success'] as const).map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewSkillColor(color)}
+                      className={`
+                        w-5 h-5 rounded-full border-2 transition-all cursor-pointer
+                        ${color === 'primary' ? 'bg-[#00f2fe]' : ''}
+                        ${color === 'secondary' ? 'bg-[#e100ff]' : ''}
+                        ${color === 'accent' ? 'bg-[#ff4769]' : ''}
+                        ${color === 'gold' ? 'bg-[#f6d365]' : ''}
+                        ${color === 'success' ? 'bg-[#00b09b]' : ''}
+                        ${newSkillColor === color ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.4)]' : 'border-transparent'}
+                      `}
+                    />
+                  ))}
+                </div>
+
+                {aiError && (
+                  <div className="p-2 rounded-lg bg-red-950/40 border border-red-500/20 text-red-400 text-[11px]">
+                    {aiError}
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={isAiGenerating || !aiPrompt.trim()}
+                  className="w-full py-2 bg-gradient-to-r from-[#e100ff] to-[#7f00ff] text-white font-heading font-semibold text-xs rounded-xl shadow-[0_0_15px_rgba(225,0,255,0.3)] hover:scale-[1.01] transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isAiGenerating ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Generating with Gemini AI...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={13} />
+                      <span>Generate Roadmap with AI</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {/* Mode 3: File-Upload Based Creation */}
+            {creationMode === 'upload' && (
+              <form onSubmit={handleGenerateFromFile} className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-semibold text-slate-400">Upload Syllabus, Outline, or PDF</label>
+                  
+                  <label className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-white/2 hover:bg-white/4 border border-white/8 hover:border-white/15 border-dashed cursor-pointer transition-all">
+                    <Paperclip size={18} className="text-[#00f2fe]" />
+                    <span className="text-xs text-slate-300 font-medium text-center">
+                      {uploadedFile ? uploadedFile.name : 'Choose a file (PDF, TXT, MD, DOCX)'}
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      {uploadedFile ? `${Math.round(uploadedFile.size / 1024)} KB` : 'Gemini AI will extract structured levels & topics'}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf,.txt,.md,.json,.csv,.doc,.docx"
+                      onChange={(e) => setUploadedFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      disabled={isAiGenerating}
+                    />
+                  </label>
+                </div>
+
+                <div className="flex gap-2 my-1 items-center">
+                  <span className="text-[10px] text-slate-500 mr-1">Color:</span>
+                  {(['primary', 'secondary', 'accent', 'gold', 'success'] as const).map(color => (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setNewSkillColor(color)}
+                      className={`
+                        w-5 h-5 rounded-full border-2 transition-all cursor-pointer
+                        ${color === 'primary' ? 'bg-[#00f2fe]' : ''}
+                        ${color === 'secondary' ? 'bg-[#e100ff]' : ''}
+                        ${color === 'accent' ? 'bg-[#ff4769]' : ''}
+                        ${color === 'gold' ? 'bg-[#f6d365]' : ''}
+                        ${color === 'success' ? 'bg-[#00b09b]' : ''}
+                        ${newSkillColor === color ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.4)]' : 'border-transparent'}
+                      `}
+                    />
+                  ))}
+                </div>
+
+                {aiError && (
+                  <div className="p-2 rounded-lg bg-red-950/40 border border-red-500/20 text-red-400 text-[11px]">
+                    {aiError}
+                  </div>
+                )}
+
+                <button 
+                  type="submit"
+                  disabled={isAiGenerating || !uploadedFile}
+                  className="w-full py-2 bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-slate-900 font-heading font-semibold text-xs rounded-xl shadow-[0_0_15px_rgba(0,242,254,0.3)] hover:scale-[1.01] transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isAiGenerating ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Analyzing Document with AI...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={13} />
+                      <span>Extract Roadmap from File</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
           </GlassCard>
         </div>
 
@@ -696,6 +1014,176 @@ export const SkillsTracker: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Roadmap Preview & Confirmation Dialog Modal */}
+      <AnimatePresence>
+        {previewRoadmap && (
+          <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPreviewRoadmap(null)}
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 15, opacity: 0 }}
+              className="relative w-full max-w-2xl bg-[#090e1a]/95 border border-white/10 rounded-2xl p-6 lg:p-7 shadow-[0_0_40px_rgba(0,0,0,0.8)] z-10 max-h-[88vh] overflow-y-auto scrollbar-thin"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles size={18} className="text-[#e100ff]" />
+                    <h3 className="font-heading font-extrabold text-slate-100 text-lg">
+                      Roadmap Preview & Confirmation
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Review your AI-generated curriculum before adding it to your active skill matrix.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewRoadmap(null)}
+                  className="p-1.5 text-slate-500 hover:text-white rounded-lg hover:bg-white/5 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Skill Title & Color Customization in Preview */}
+              <div className="bg-white/3 border border-white/8 rounded-xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex flex-col gap-1 flex-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Skill Title</label>
+                  <input
+                    type="text"
+                    value={previewSkillName}
+                    onChange={(e) => setPreviewSkillName(e.target.value)}
+                    className="bg-black/30 border border-white/10 rounded-lg py-1.5 px-3 text-sm font-heading font-bold text-[#00f2fe] outline-none focus:border-[#00f2fe]/40 w-full"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Accent Color</label>
+                  <div className="flex gap-1.5 items-center">
+                    {(['primary', 'secondary', 'accent', 'gold', 'success'] as const).map(color => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setPreviewSkillColor(color)}
+                        className={`
+                          w-5 h-5 rounded-full border-2 transition-all cursor-pointer
+                          ${color === 'primary' ? 'bg-[#00f2fe]' : ''}
+                          ${color === 'secondary' ? 'bg-[#e100ff]' : ''}
+                          ${color === 'accent' ? 'bg-[#ff4769]' : ''}
+                          ${color === 'gold' ? 'bg-[#f6d365]' : ''}
+                          ${color === 'success' ? 'bg-[#00b09b]' : ''}
+                          ${previewSkillColor === color ? 'border-white scale-110 shadow-[0_0_10px_rgba(255,255,255,0.4)]' : 'border-transparent'}
+                        `}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Generated Curriculum Structure Preview */}
+              <div className="flex flex-col gap-3 mb-5">
+                <div className="flex items-center justify-between text-xs text-slate-400 font-semibold px-1">
+                  <span>Generated Levels & Topics ({previewRoadmap.levels.length} levels)</span>
+                  <span>
+                    {previewRoadmap.levels.reduce((sum, l) => sum + l.topics.length, 0)} total topics
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-2.5 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
+                  {previewRoadmap.levels.map((lvl) => (
+                    <div 
+                      key={lvl.levelNumber} 
+                      className="bg-white/2 border border-white/6 rounded-xl p-3.5 hover:border-white/10 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <GitBranch size={14} className="text-[#00f2fe]" />
+                          <span className="font-heading font-bold text-xs text-slate-200">
+                            Level {lvl.levelNumber}: {lvl.name}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-500 bg-white/5 py-0.5 px-2 rounded-full">
+                          {lvl.topics.length} topics
+                        </span>
+                      </div>
+
+                      <ul className="flex flex-col gap-1.5 pl-5 list-disc text-xs text-slate-400">
+                        {lvl.topics.map((t, idx) => (
+                          <li key={idx} className="leading-snug">
+                            <span className="text-slate-300">{t}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Confirmation Question Alert Banner */}
+              <div className="p-3.5 rounded-xl bg-[#00f2fe]/5 border border-[#00f2fe]/15 mb-5 flex items-start gap-2.5">
+                <Sparkles size={16} className="text-[#00f2fe] shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <span className="font-heading font-bold text-slate-200 block">Looks good? Save this roadmap?</span>
+                  <span className="text-slate-400 text-[11px] leading-relaxed block mt-0.5">
+                    Once confirmed, this roadmap will be saved to your profile. You can edit, reorder, add, or delete individual topics and levels anytime afterward.
+                  </span>
+                </div>
+              </div>
+
+              {/* Action Buttons: Cancel, Regenerate, Confirm & Save */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewRoadmap(null)}
+                  className="py-2.5 px-4 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl text-xs font-heading font-semibold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRegenerateRoadmap}
+                    disabled={isAiGenerating}
+                    className="py-2.5 px-4 bg-white/5 hover:bg-white/10 text-[#00f2fe] border border-[#00f2fe]/20 rounded-xl text-xs font-heading font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <RotateCcw size={13} className={isAiGenerating ? 'animate-spin' : ''} />
+                    <span>{isAiGenerating ? 'Regenerating...' : 'Regenerate'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleConfirmSaveRoadmap}
+                    disabled={isSavingRoadmap || isAiGenerating}
+                    className="py-2.5 px-5 bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-slate-900 rounded-xl text-xs font-heading font-semibold shadow-[0_0_15px_rgba(0,242,254,0.3)] hover:scale-[1.01] flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingRoadmap ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check size={14} />
+                        <span>Confirm & Save Roadmap</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

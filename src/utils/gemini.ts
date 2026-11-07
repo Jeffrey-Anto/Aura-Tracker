@@ -1,10 +1,25 @@
-// Google Gemini AI integration for Document / PDF processing & checklist generation
+// Google Gemini AI integration for Document / PDF processing, Checklists & Roadmaps
 
 export interface GeminiChecklistResponse {
   items: string[];
   source: 'gemini' | 'fallback';
   warning?: string;
 }
+
+export interface GeneratedRoadmapLevel {
+  levelNumber: number;
+  name: string;
+  topics: string[];
+}
+
+export interface GeneratedRoadmapResponse {
+  skillName: string;
+  levels: GeneratedRoadmapLevel[];
+  source: 'gemini' | 'fallback';
+  warning?: string;
+}
+
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.8-flash', 'gemini-1.5-pro'];
 
 /**
  * Retrieves the Gemini API key from environment variables or local storage
@@ -68,30 +83,22 @@ export const extractFallbackChecklist = (text: string, filename: string): string
   const items: string[] = [];
 
   for (const line of lines) {
-    // Check for markdown checklists: - [ ] Task or - [x] Task
     if (/^[-*+]\s*\[[\sx]\]\s+/i.test(line)) {
       items.push(line.replace(/^[-*+]\s*\[[\sx]\]\s+/i, ''));
-    }
-    // Check for numbered lists: 1. Task or 1) Task
-    else if (/^\d+[\.\)]\s+/.test(line)) {
+    } else if (/^\d+[\.\)]\s+/.test(line)) {
       items.push(line.replace(/^\d+[\.\)]\s+/, ''));
-    }
-    // Check for bullet items: - Task or * Task
-    else if (/^[-*•]\s+/.test(line)) {
+    } else if (/^[-*•]\s+/.test(line)) {
       const clean = line.replace(/^[-*•]\s+/, '');
       if (clean.length > 5 && clean.length < 150) {
         items.push(clean);
       }
-    }
-    // Check for "TODO:" or "Task:" lines
-    else if (/^(TODO|TASK|STEP|MILESTONE):\s*/i.test(line)) {
+    } else if (/^(TODO|TASK|STEP|MILESTONE):\s*/i.test(line)) {
       items.push(line.replace(/^(TODO|TASK|STEP|MILESTONE):\s*/i, ''));
     }
 
     if (items.length >= 15) break;
   }
 
-  // If no patterned items were found, extract sensible non-empty lines
   if (items.length === 0) {
     const sensibleLines = lines
       .filter(l => l.length > 8 && l.length < 120 && !l.startsWith('#'))
@@ -118,7 +125,6 @@ export const generateChecklistFromDocument = async (file: File): Promise<GeminiC
   const apiKey = getGeminiApiKey();
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-  // If no Gemini key is provided, use resilient local extraction with user notification
   if (!apiKey) {
     if (isPdf) {
       return {
@@ -154,7 +160,6 @@ export const generateChecklistFromDocument = async (file: File): Promise<GeminiC
     }
   }
 
-  // Gemini API is configured! Call Gemini 1.5 Flash (or 2.0 Flash)
   const systemInstruction = 
     "You are an expert productivity assistant. Analyze the user's attached document and extract a clear, concise, actionable, chronological step-by-step checklist of tasks and sub-tasks required to complete the project or study material.\n" +
     "Format requirements:\n" +
@@ -187,7 +192,6 @@ export const generateChecklistFromDocument = async (file: File): Promise<GeminiC
       }
     };
   } else {
-    // Text-based file
     const textContent = await fileToText(file);
     requestBody = {
       contents: [
@@ -205,11 +209,9 @@ export const generateChecklistFromDocument = async (file: File): Promise<GeminiC
     };
   }
 
-  // Model endpoints to try (primary: 1.5-flash, fallback: 2.0-flash)
-  const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
   let lastError: any = null;
 
-  for (const model of models) {
+  for (const model of GEMINI_MODELS) {
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -232,7 +234,6 @@ export const generateChecklistFromDocument = async (file: File): Promise<GeminiC
         throw new Error('No content returned from Gemini model');
       }
 
-      // Clean JSON formatting if wrapped in codeblocks
       const cleaned = rawText
         .trim()
         .replace(/^```json\s*/i, '')
@@ -255,11 +256,9 @@ export const generateChecklistFromDocument = async (file: File): Promise<GeminiC
       }
     } catch (err: any) {
       lastError = err;
-      // Continue to next model if available
     }
   }
 
-  // If Gemini calls failed, log and fallback gracefully
   console.warn('Gemini API call failed, using fallback parser:', lastError?.message || lastError);
 
   let fallbackItems: string[];
@@ -282,3 +281,323 @@ export const generateChecklistFromDocument = async (file: File): Promise<GeminiC
   };
 };
 
+/**
+ * Generates a full structured roadmap (Skill name, levels, and topic milestones)
+ * from a plain text user prompt (e.g. "React roadmap", "Docker & Kubernetes").
+ */
+export const generateRoadmapFromPrompt = async (prompt: string): Promise<GeneratedRoadmapResponse> => {
+  const apiKey = getGeminiApiKey();
+
+  // Fallback generator when API key is missing
+  const createFallbackRoadmap = (cleanTitle: string): GeneratedRoadmapResponse => {
+    return {
+      skillName: cleanTitle,
+      levels: [
+        {
+          levelNumber: 1,
+          name: 'Fundamentals & Setup',
+          topics: [
+            `Introduction & Environment Setup for ${cleanTitle}`,
+            'Core Syntax, Principles & Tooling',
+            'Essential Concepts & Basic Workflow',
+            'First Hands-on Project Implementation'
+          ]
+        },
+        {
+          levelNumber: 2,
+          name: 'Intermediate Patterns',
+          topics: [
+            'Component / Module Architecture',
+            'State & Data Flow Management',
+            'Error Handling & Asynchronous Operations',
+            'Integrating External Libraries & APIs'
+          ]
+        },
+        {
+          levelNumber: 3,
+          name: 'Advanced & Production Best Practices',
+          topics: [
+            'Performance Optimization & Caching',
+            'Security Standards & Vulnerability Audits',
+            'Automated Testing & CI/CD Pipelines',
+            'Production Deployment & Monitoring'
+          ]
+        }
+      ],
+      source: 'fallback',
+      warning: 'Generated template roadmap locally. Configure VITE_GEMINI_API_KEY in .env for custom AI curriculum synthesis.'
+    };
+  };
+
+  const rawTitle = prompt.replace(/roadmap/i, '').trim();
+  const cleanTitle = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1) || 'Custom Skill';
+
+  if (!apiKey) {
+    return createFallbackRoadmap(cleanTitle);
+  }
+
+  const instruction = 
+    "You are an expert curriculum designer and senior software engineer. Create a structured, professional, chronological learning roadmap for: " + prompt + ".\n" +
+    "Requirements:\n" +
+    "1. Choose a concise, professional skill name (e.g. 'React Developer', 'Kubernetes Mastery', 'DSA & Algorithms').\n" +
+    "2. Provide 3 to 4 sequential proficiency levels (e.g. 'Level 1: Fundamentals', 'Level 2: Core Concepts', 'Level 3: Advanced Architecture', 'Level 4: Production & Ecosystem').\n" +
+    "3. Under each level, include 3 to 5 clear, high-yield, actionable topics/milestones.\n" +
+    "4. Return ONLY a valid raw JSON object matching this schema:\n" +
+    "{\n" +
+    "  \"skillName\": \"React Developer\",\n" +
+    "  \"levels\": [\n" +
+    "    {\n" +
+    "      \"levelNumber\": 1,\n" +
+    "      \"name\": \"Fundamentals\",\n" +
+    "      \"topics\": [\"Topic 1\", \"Topic 2\", \"Topic 3\"]\n" +
+    "    }\n" +
+    "  ]\n" +
+    "}";
+
+  const requestBody = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: instruction }]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: 'application/json'
+    }
+  };
+
+  let lastError: any = null;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!rawText) throw new Error('No content returned from Gemini model');
+
+      const cleaned = rawText
+        .trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```$/i, '')
+        .trim();
+
+      const parsed = JSON.parse(cleaned);
+
+      if (parsed && typeof parsed.skillName === 'string' && Array.isArray(parsed.levels) && parsed.levels.length > 0) {
+        const levels: GeneratedRoadmapLevel[] = parsed.levels.map((lvl: any, idx: number) => ({
+          levelNumber: typeof lvl.levelNumber === 'number' ? lvl.levelNumber : idx + 1,
+          name: String(lvl.name || `Level ${idx + 1}`),
+          topics: Array.isArray(lvl.topics) ? lvl.topics.map(String).filter(Boolean) : []
+        }));
+
+        return {
+          skillName: parsed.skillName.trim() || cleanTitle,
+          levels,
+          source: 'gemini'
+        };
+      }
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+
+  console.warn('Gemini roadmap generation failed, falling back:', lastError?.message || lastError);
+  return createFallbackRoadmap(cleanTitle);
+};
+
+/**
+ * Generates a full structured roadmap from an uploaded syllabus/specification document or PDF.
+ */
+export const generateRoadmapFromFile = async (file: File): Promise<GeneratedRoadmapResponse> => {
+  const apiKey = getGeminiApiKey();
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const baseTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  const capitalizedTitle = baseTitle.charAt(0).toUpperCase() + baseTitle.slice(1);
+
+  if (!apiKey) {
+    return {
+      skillName: capitalizedTitle,
+      levels: [
+        {
+          levelNumber: 1,
+          name: 'Core Fundamentals',
+          topics: [
+            `Analyze ${file.name} syllabus overview`,
+            'Fundamental concepts & prerequisite knowledge',
+            'Core module walkthrough'
+          ]
+        },
+        {
+          levelNumber: 2,
+          name: 'Applied Modules',
+          topics: [
+            'In-depth chapter exercises',
+            'Technical problem solving & implementations',
+            'Mid-point checkpoint & practical review'
+          ]
+        },
+        {
+          levelNumber: 3,
+          name: 'Capstone & Advanced Topics',
+          topics: [
+            'Advanced topics & system integration',
+            'Final project deliverables & case studies',
+            'Review, evaluation & mastery verification'
+          ]
+        }
+      ],
+      source: 'fallback',
+      warning: 'Gemini API key is not configured in .env. Generated outline locally. Add VITE_GEMINI_API_KEY for deep AI extraction.'
+    };
+  }
+
+  const instruction = 
+    "You are an expert curriculum designer. Analyze the attached syllabus, curriculum, or guide and generate a comprehensive, structured learning roadmap.\n" +
+    "Requirements:\n" +
+    "1. Infer a concise, professional skill name (e.g. 'Cloud Architecture', 'Distributed Systems', 'Applied Machine Learning').\n" +
+    "2. Organize the content into 3 to 5 chronological learning levels (e.g. Level 1: Foundations, Level 2: Core Components, Level 3: Advanced Topics, Level 4: Capstone).\n" +
+    "3. Under each level, include 3 to 5 clear, high-yield, actionable topics/milestones.\n" +
+    "4. Return ONLY a valid raw JSON object matching this schema:\n" +
+    "{\n" +
+    "  \"skillName\": \"Skill Name\",\n" +
+    "  \"levels\": [\n" +
+    "    {\n" +
+    "      \"levelNumber\": 1,\n" +
+    "      \"name\": \"Level Name\",\n" +
+    "      \"topics\": [\"Topic 1\", \"Topic 2\"]\n" +
+    "    }\n" +
+    "  ]\n" +
+    "}";
+
+  let requestBody: any;
+
+  if (isPdf) {
+    const base64Data = await fileToBase64(file);
+    requestBody = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: `${instruction}\n\nDocument filename: ${file.name}` },
+            {
+              inline_data: {
+                mime_type: 'application/pdf',
+                data: base64Data
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: 'application/json'
+      }
+    };
+  } else {
+    const textContent = await fileToText(file);
+    requestBody = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: `${instruction}\n\nDocument filename: ${file.name}\n\nDocument Content:\n${textContent.slice(0, 60000)}` }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: 'application/json'
+      }
+    };
+  }
+
+  let lastError: any = null;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      const rawText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!rawText) throw new Error('No content returned from Gemini model');
+
+      const cleaned = rawText
+        .trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```$/i, '')
+        .trim();
+
+      const parsed = JSON.parse(cleaned);
+
+      if (parsed && typeof parsed.skillName === 'string' && Array.isArray(parsed.levels) && parsed.levels.length > 0) {
+        const levels: GeneratedRoadmapLevel[] = parsed.levels.map((lvl: any, idx: number) => ({
+          levelNumber: typeof lvl.levelNumber === 'number' ? lvl.levelNumber : idx + 1,
+          name: String(lvl.name || `Level ${idx + 1}`),
+          topics: Array.isArray(lvl.topics) ? lvl.topics.map(String).filter(Boolean) : []
+        }));
+
+        return {
+          skillName: parsed.skillName.trim() || capitalizedTitle,
+          levels,
+          source: 'gemini'
+        };
+      }
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+
+  console.warn('Gemini document roadmap extraction failed:', lastError?.message || lastError);
+  return {
+    skillName: capitalizedTitle,
+    levels: [
+      {
+        levelNumber: 1,
+        name: 'Foundations',
+        topics: [`Overview of ${file.name}`, 'Core concepts and terms', 'Introductory exercises']
+      },
+      {
+        levelNumber: 2,
+        name: 'Core Topics',
+        topics: ['Main architecture and modules', 'Deep dive exercises', 'Practical application']
+      },
+      {
+        levelNumber: 3,
+        name: 'Advanced & Review',
+        topics: ['Advanced principles', 'Evaluation & testing', 'Final mastery synthesis']
+      }
+    ],
+    source: 'fallback',
+    warning: `AI extraction encountered an error (${lastError?.message || 'Network error'}). Extracted outline locally.`
+  };
+};

@@ -46,7 +46,13 @@ interface AppContextType extends AppState {
   updateGoal: (period: 'daily' | 'weekly' | 'monthly', target: keyof GoalTarget, value: number) => void;
   
   // Skill CRUD
-  createSkill: (name: string, color?: string, templateType?: string) => Promise<void>;
+  createSkill: (
+    name: string, 
+    color?: string, 
+    templateType?: string, 
+    customRoadmap?: { level: number; topic: string }[], 
+    customLevels?: { level_number: number; name: string }[]
+  ) => Promise<string | undefined>;
   deleteSkill: (slug: string) => Promise<void>;
   addRoadmapTopic: (skillId: string, level: number, topic: string) => Promise<void>;
   editRoadmapTopic: (skillId: string, topicId: string, updatedName: string) => Promise<void>;
@@ -1198,10 +1204,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const createSkill = async (name: string, color: string = 'primary', templateType: string = 'empty') => {
+  const createSkill = async (
+    name: string, 
+    color: string = 'primary', 
+    templateType: string = 'empty',
+    customRoadmap?: { level: number; topic: string }[],
+    customLevels?: { level_number: number; name: string }[]
+  ): Promise<string | undefined> => {
     if (!user) return;
     const slug = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    if (skills[slug]) return;
+    if (skills[slug]) return slug;
 
     const { data: newSkill, error } = await supabase
       .from('skills')
@@ -1221,18 +1233,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    // 1. Insert default level names into skill_levels
-    const defaultLevelsToInsert = [1, 2, 3, 4, 5].map(num => ({
-      skill_id: newSkill.id,
-      user_id: user.id,
-      level_number: num,
-      name: DEFAULT_LEVEL_NAMES[num] || `Level ${num}`,
-      display_order: num
-    }));
+    // 1. Insert levels into skill_levels
+    let levelsToInsert: any[] = [];
+    if (customLevels && customLevels.length > 0) {
+      levelsToInsert = customLevels.map((lvl, idx) => ({
+        skill_id: newSkill.id,
+        user_id: user.id,
+        level_number: lvl.level_number || idx + 1,
+        name: lvl.name || `Level ${idx + 1}`,
+        display_order: idx + 1
+      }));
+    } else {
+      levelsToInsert = [1, 2, 3, 4, 5].map(num => ({
+        skill_id: newSkill.id,
+        user_id: user.id,
+        level_number: num,
+        name: DEFAULT_LEVEL_NAMES[num] || `Level ${num}`,
+        display_order: num
+      }));
+    }
 
     const { data: insertedLevels, error: levelsErr } = await supabase
       .from('skill_levels')
-      .insert(defaultLevelsToInsert)
+      .insert(levelsToInsert)
       .select();
 
     if (levelsErr) {
@@ -1247,9 +1270,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       display_order: l.display_order
     }));
 
-    // 2. Insert template topics if selected
+    // 2. Insert topics (custom AI-generated or template)
     let roadmapTopics: any[] = [];
-    if (templateType && templateType !== 'empty' && TEMPLATE_TOPICS[templateType]) {
+    if (customRoadmap && customRoadmap.length > 0) {
+      const topicsToInsert = customRoadmap.map(topic => ({
+        skill_id: newSkill.id,
+        user_id: user.id,
+        level: topic.level,
+        topic: topic.topic,
+        completed: false
+      }));
+
+      const { data: insertedTopics, error: topicsErr } = await supabase
+        .from('skill_topics')
+        .insert(topicsToInsert)
+        .select();
+
+      if (topicsErr) {
+        console.error("Error inserting custom roadmap topics:", topicsErr);
+      } else {
+        roadmapTopics = (insertedTopics || []).map(t => ({
+          id: t.id,
+          level: t.level,
+          topic: t.topic,
+          completed: t.completed
+        }));
+      }
+    } else if (templateType && templateType !== 'empty' && TEMPLATE_TOPICS[templateType]) {
       const topicsToInsert = TEMPLATE_TOPICS[templateType].map(topic => ({
         skill_id: newSkill.id,
         user_id: user.id,
@@ -1285,7 +1332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         xp: 0,
         color,
         roadmap: roadmapTopics,
-        levels: finalLevels.length > 0 ? finalLevels : defaultLevelsToInsert.map((l) => ({
+        levels: finalLevels.length > 0 ? finalLevels : levelsToInsert.map((l) => ({
           id: `temp-${newSkill.id}-${l.level_number}`,
           skill_id: newSkill.id,
           level_number: l.level_number,
@@ -1296,10 +1343,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     setToast({
-      title: 'New Skill Profile',
-      message: `"${name}" added to skills catalog.`,
+      title: 'Skill Roadmap Initialized',
+      message: `"${name}" configured with ${roadmapTopics.length} topics across ${finalLevels.length > 0 ? finalLevels.length : levelsToInsert.length} levels.`,
       type: 'success'
     });
+
+    return slug;
   };
 
   const deleteSkill = async (slug: string) => {
