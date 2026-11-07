@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   PlusCircle, Settings, Trash2, Calendar, Target, Clock, BookOpen, 
   Binary, Archive, Check, X, Edit2, Plus 
@@ -7,6 +7,17 @@ import { useApp } from '../context/AppContext';
 import { GlassCard } from '../components/GlassCard';
 import { getLocalDateString, parseLocalDate, formatLocalDateStr } from '../utils/date';
 import type { Goal } from '../types';
+
+const STANDARD_ACTIVITY_NAMES: Record<string, string> = {
+  study: 'General Study',
+  react: 'React Learning',
+  dsa: 'DSA Practice',
+  dbms: 'DBMS Review',
+  aptitude: 'Aptitude Training',
+  communication: 'Communication Practice',
+  workout: 'Workout Session',
+  reading: 'Reading Session'
+};
 
 export const ActivityTracker: React.FC = () => {
   const { 
@@ -32,6 +43,7 @@ export const ActivityTracker: React.FC = () => {
   const [logAmount, setLogAmount] = useState(2);
   const [logNotes, setLogNotes] = useState('');
   const [logDate, setLogDate] = useState(getLocalDateString());
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   // Goal config states
   const [goalPeriod, setGoalPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
@@ -40,6 +52,21 @@ export const ActivityTracker: React.FC = () => {
   const periodGoals = useMemo(() => {
     return goalsList.filter(g => g.period === goalPeriod && !g.is_archived);
   }, [goalsList, goalPeriod]);
+
+  // Distinct active goals from Goal Manager to populate Activity Category dropdown
+  const goalCategoryOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Goal[] = [];
+    for (const g of goalsList) {
+      if (g.is_archived) continue;
+      const normalized = g.title.trim().toLowerCase();
+      if (!seen.has(normalized)) {
+        seen.add(normalized);
+        list.push(g);
+      }
+    }
+    return list;
+  }, [goalsList]);
 
   // Controlled goal target values keyed by goal ID
   const [goalInputs, setGoalInputs] = useState<Record<string, number>>({});
@@ -158,6 +185,15 @@ export const ActivityTracker: React.FC = () => {
       return { min: 1, max: 100, step: 1, unit: custom.unit };
     }
 
+    const goalMatch = goalsList.find(g => `goal_${g.id}` === type || g.id === type || (g.title && g.title.toLowerCase() === type.toLowerCase()));
+    if (goalMatch) {
+      const u = (goalMatch.unit || '').toLowerCase();
+      if (u === 'mins' || u === 'minutes') return { min: 5, max: 180, step: 5, unit: goalMatch.unit || 'mins' };
+      if (u === 'hrs' || u === 'hours') return { min: 0.5, max: 12, step: 0.5, unit: goalMatch.unit || 'hrs' };
+      if (u === 'solved' || u === 'count' || u === 'problems') return { min: 1, max: 20, step: 1, unit: goalMatch.unit || 'solved' };
+      return { min: 1, max: 100, step: 1, unit: goalMatch.unit || 'units' };
+    }
+
     switch (type) {
       case 'workout':
       case 'reading':
@@ -175,20 +211,29 @@ export const ActivityTracker: React.FC = () => {
     const type = e.target.value;
     setLogType(type);
     const config = getSliderConfig(type);
-    setLogAmount(config.min === 0.5 ? 2 : config.min === 10 ? 30 : 3);
+    if (config.unit === 'hrs' || config.unit === 'hours') {
+      setLogAmount(2);
+    } else if (config.unit === 'mins' || config.unit === 'minutes') {
+      setLogAmount(30);
+    } else if (config.unit === 'solved' || config.unit === 'count' || config.unit === 'problems') {
+      setLogAmount(3);
+    } else {
+      setLogAmount(config.min || 1);
+    }
   };
 
   // Submit logging
   const handleLogSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const custom = customActivities.find(act => act.id === logType);
+    const goalMatch = goalsList.find(g => `goal_${g.id}` === logType || g.id === logType || (g.title && g.title.toLowerCase() === logType.toLowerCase()));
     addLog({
       type: logType,
       amount: logAmount,
       date: logDate,
       notes: logNotes,
       unit: sliderConfig.unit,
-      category: custom ? custom.category : undefined
+      category: goalMatch ? goalMatch.title : (custom ? custom.category : undefined)
     });
     setLogNotes('');
   };
@@ -254,27 +299,36 @@ export const ActivityTracker: React.FC = () => {
       periodLogs = logs;
     }
 
+    const matchesGoal = (l: typeof logs[0]) => {
+      if (l.type === goal.id || l.type === `goal_${goal.id}`) return true;
+      if (goal.title && (
+        (l.category && l.category.toLowerCase() === goal.title.toLowerCase()) ||
+        (l.type && l.type.toLowerCase() === goal.title.toLowerCase())
+      )) return true;
+      return false;
+    };
+
     if (goal.target_field === 'studyHours') {
       return periodLogs
-        .filter(l => l.type === 'study' || l.type === 'react' || l.type === 'dsa' || l.type === 'dbms' || l.type === 'aptitude' || l.type === 'communication' || !!skills[l.type])
+        .filter(l => l.type === 'study' || l.type === 'react' || l.type === 'dsa' || l.type === 'dbms' || l.type === 'aptitude' || l.type === 'communication' || !!skills[l.type] || matchesGoal(l))
         .reduce((sum, l) => sum + (l.unit === 'hrs' ? Number(l.amount) : 0), 0);
     } else if (goal.target_field === 'workoutMins') {
       return periodLogs
-        .filter(l => l.type === 'workout')
+        .filter(l => l.type === 'workout' || matchesGoal(l))
         .reduce((sum, l) => sum + Number(l.amount), 0);
     } else if (goal.target_field === 'readingMins') {
       return periodLogs
-        .filter(l => l.type === 'reading')
+        .filter(l => l.type === 'reading' || matchesGoal(l))
         .reduce((sum, l) => sum + Number(l.amount), 0);
     } else if (goal.target_field === 'leetcodeCount') {
       return periodLogs
-        .filter(l => l.type === 'dsa')
+        .filter(l => l.type === 'dsa' || matchesGoal(l))
         .reduce((sum, l) => sum + Number(l.amount), 0);
     } else {
       // Custom goal matches type ID or name
       const targetId = goal.target_field;
       return periodLogs
-        .filter(l => l.type === targetId || l.category === targetId)
+        .filter(l => (targetId && (l.type === targetId || l.category === targetId)) || matchesGoal(l))
         .reduce((sum, l) => sum + Number(l.amount), 0);
     }
   };
@@ -298,21 +352,38 @@ export const ActivityTracker: React.FC = () => {
               <select 
                 value={logType} 
                 onChange={handleLogTypeChange}
-                className="bg-white/3 border border-white/8 rounded-xl py-2.5 px-4 text-slate-100 text-sm outline-none focus:border-[#00f2fe]/40 transition-colors"
+                className="bg-white/3 border border-white/8 rounded-xl py-2.5 px-4 text-slate-100 text-sm outline-none focus:border-[#00f2fe]/40 transition-colors cursor-pointer"
               >
-                <option value="study" className="bg-[#060913] text-white">General Study</option>
-                <option value="react" className="bg-[#060913] text-white">React Learning</option>
-                <option value="dsa" className="bg-[#060913] text-white">DSA Practice</option>
-                <option value="dbms" className="bg-[#060913] text-white">DBMS Review</option>
-                <option value="aptitude" className="bg-[#060913] text-white">Aptitude Training</option>
-                <option value="communication" className="bg-[#060913] text-white">Communication Practice</option>
-                <option value="workout" className="bg-[#060913] text-white">Workout Session</option>
-                <option value="reading" className="bg-[#060913] text-white">Reading Session</option>
-                {customActivities.map(act => (
-                  <option key={act.id} value={act.id} className="bg-[#060913] text-white">
-                    {act.name}
-                  </option>
-                ))}
+                <optgroup label="Standard Categories" className="bg-[#0b101e] text-slate-400 font-semibold">
+                  <option value="study" className="bg-[#060913] text-white">General Study</option>
+                  <option value="react" className="bg-[#060913] text-white">React Learning</option>
+                  <option value="dsa" className="bg-[#060913] text-white">DSA Practice</option>
+                  <option value="dbms" className="bg-[#060913] text-white">DBMS Review</option>
+                  <option value="aptitude" className="bg-[#060913] text-white">Aptitude Training</option>
+                  <option value="communication" className="bg-[#060913] text-white">Communication Practice</option>
+                  <option value="workout" className="bg-[#060913] text-white">Workout Session</option>
+                  <option value="reading" className="bg-[#060913] text-white">Reading Session</option>
+                </optgroup>
+
+                {customActivities.length > 0 && (
+                  <optgroup label="Custom Activities" className="bg-[#0b101e] text-slate-400 font-semibold">
+                    {customActivities.map(act => (
+                      <option key={act.id} value={act.id} className="bg-[#060913] text-white">
+                        {act.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+
+                {goalCategoryOptions.length > 0 && (
+                  <optgroup label="Goal Manager Categories" className="bg-[#0b101e] text-[#00f2fe] font-semibold">
+                    {goalCategoryOptions.map(goal => (
+                      <option key={goal.id} value={`goal_${goal.id}`} className="bg-[#060913] text-white">
+                        {goal.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
 
@@ -347,11 +418,26 @@ export const ActivityTracker: React.FC = () => {
               <label className="text-xs font-semibold text-slate-400">Date</label>
               <div className="relative flex items-center">
                 <input 
+                  ref={dateInputRef}
                   type="date"
                   value={logDate}
                   onChange={(e) => setLogDate(e.target.value)}
-                  className="w-full bg-white/3 border border-white/8 rounded-xl py-2.5 px-4 text-slate-100 text-sm outline-none focus:border-[#00f2fe]/40 transition-colors"
+                  className="w-full bg-white/3 border border-white/8 rounded-xl py-2.5 pl-4 pr-11 text-slate-100 text-sm outline-none focus:border-[#00f2fe]/40 transition-colors [color-scheme:dark] custom-date-input cursor-pointer"
                 />
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      dateInputRef.current?.showPicker();
+                    } catch {
+                      dateInputRef.current?.focus();
+                    }
+                  }}
+                  className="absolute right-3.5 p-1 text-white hover:text-[#00f2fe] transition-colors cursor-pointer flex items-center justify-center z-10"
+                  title="Open calendar"
+                >
+                  <Calendar size={18} className="text-white shrink-0" />
+                </button>
               </div>
             </div>
 
@@ -662,7 +748,12 @@ export const ActivityTracker: React.FC = () => {
                 <tbody className="divide-y divide-white/5">
                   {logs.map((log) => {
                     const customType = customActivities.find(act => act.id === log.type);
-                    const displayName = customType ? customType.name : log.type.toUpperCase();
+                    const goalMatch = goalsList.find(g => `goal_${g.id}` === log.type || g.id === log.type || (g.title && g.title.toLowerCase() === log.type.toLowerCase()));
+                    const displayName = goalMatch
+                      ? goalMatch.title
+                      : (customType
+                          ? customType.name
+                          : (STANDARD_ACTIVITY_NAMES[log.type] || log.category || log.type.toUpperCase()));
 
                     return (
                       <tr key={log.id} className="hover:bg-white/2 text-slate-300 transition-colors">

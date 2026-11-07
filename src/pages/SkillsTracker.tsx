@@ -29,6 +29,7 @@ export const SkillsTracker: React.FC = () => {
   const { 
     skills, 
     createSkill, 
+    editSkillName,
     addRoadmapTopic, 
     editRoadmapTopic,
     toggleRoadmapTopic, 
@@ -44,6 +45,10 @@ export const SkillsTracker: React.FC = () => {
 
   // Selected active skill for roadmap detail
   const [activeSkillId, setActiveSkillId] = useState<string>('');
+
+  // Editing active roadmap name
+  const [isEditingSkillName, setIsEditingSkillName] = useState(false);
+  const [editingSkillName, setEditingSkillName] = useState('');
   
   // Expanded states for roadmap accordions (level numbers)
   const [expandedLevels, setExpandedLevels] = useState<Record<number, boolean>>({});
@@ -357,6 +362,19 @@ export const SkillsTracker: React.FC = () => {
                           LVL {sk.level}
                         </span>
                         <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveSkillId(sk.slug);
+                            setIsEditingSkillName(true);
+                            setEditingSkillName(sk.name);
+                          }}
+                          className="text-slate-500 hover:text-[#00f2fe] p-1 rounded hover:bg-white/5 transition-all opacity-80 lg:opacity-0 group-hover:opacity-100 cursor-pointer"
+                          title="Change roadmap name"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
                           onClick={(e) => {
                             e.stopPropagation();
                             if (window.confirm(`Are you sure you want to delete the skill "${sk.name}" and all its roadmap topics?`)) {
@@ -630,10 +648,62 @@ export const SkillsTracker: React.FC = () => {
               {/* Active Skill header with automatic calculations */}
               <div className="glass-panel rounded-2xl p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <Map className="text-[#00f2fe]" size={20} />
-                    <h3 className="font-heading font-extrabold text-xl text-slate-100">{activeSkill.name} Learning Roadmap</h3>
-                  </div>
+                  {isEditingSkillName ? (
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (editingSkillName.trim()) {
+                          await editSkillName(activeSkill.slug, editingSkillName);
+                          setIsEditingSkillName(false);
+                        }
+                      }}
+                      className="flex items-center gap-2 mb-1 flex-wrap"
+                    >
+                      <Map className="text-[#00f2fe] shrink-0" size={20} />
+                      <input
+                        type="text"
+                        value={editingSkillName}
+                        onChange={(e) => setEditingSkillName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') setIsEditingSkillName(false);
+                        }}
+                        className="bg-[#060913] border border-[#00f2fe]/40 rounded-xl px-3 py-1 font-heading font-extrabold text-xl text-slate-100 outline-none w-full sm:w-auto min-w-[280px]"
+                        autoFocus
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="p-1.5 bg-[#00f2fe]/15 text-[#00f2fe] rounded-lg hover:bg-[#00f2fe]/25 transition-colors cursor-pointer"
+                        title="Save roadmap name"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingSkillName(false)}
+                        className="p-1.5 bg-white/5 text-slate-400 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                        title="Cancel"
+                      >
+                        <X size={16} />
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="flex items-center gap-2 mb-1">
+                      <Map className="text-[#00f2fe] shrink-0" size={20} />
+                      <h3 className="font-heading font-extrabold text-xl text-slate-100">{activeSkill.name} Learning Roadmap</h3>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingSkillName(true);
+                          setEditingSkillName(activeSkill.name);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-[#00f2fe] hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
+                        title="Change roadmap name"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    </div>
+                  )}
                   <span className="text-xs text-slate-500">Structured learning levels, synced through Supabase</span>
                 </div>
 

@@ -48,6 +48,36 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Date input calendar picker icon - Pure white for dark theme visibility */
+input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(100) !important;
+  cursor: pointer;
+  opacity: 0.95;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.08);
+}
+
+.custom-date-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 2.75rem;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0 !important;
+  cursor: pointer;
+  z-index: 20;
+}
+
 /* Background Glowing Blobs */
 .blob {
   position: absolute;

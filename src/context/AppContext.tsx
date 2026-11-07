@@ -54,6 +54,7 @@ interface AppContextType extends AppState {
     customLevels?: { level_number: number; name: string }[]
   ) => Promise<string | undefined>;
   deleteSkill: (slug: string) => Promise<void>;
+  editSkillName: (slug: string, newName: string) => Promise<void>;
   addRoadmapTopic: (skillId: string, level: number, topic: string) => Promise<void>;
   editRoadmapTopic: (skillId: string, topicId: string, updatedName: string) => Promise<void>;
   deleteRoadmapTopic: (skillId: string, topicId: string) => Promise<void>;
@@ -1375,6 +1376,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const editSkillName = async (slug: string, newName: string) => {
+    if (!user || !skills[slug]) return;
+    const skillUuid = skills[slug].id;
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+
+    const { error } = await supabase
+      .from('skills')
+      .update({ name: trimmed })
+      .eq('id', skillUuid);
+
+    if (error) throw error;
+
+    setSkills(prev => {
+      const skill = prev[slug];
+      if (!skill) return prev;
+      return {
+        ...prev,
+        [slug]: {
+          ...skill,
+          name: trimmed
+        }
+      };
+    });
+
+    setToast({
+      title: 'Roadmap Renamed',
+      message: `Roadmap name updated to "${trimmed}".`,
+      type: 'success'
+    });
+  };
+
   const addRoadmapTopic = async (skillId: string, levelNum: number, topicName: string) => {
     if (!user || !skills[skillId]) return;
     const skillUuid = skills[skillId].id;
@@ -2304,6 +2337,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Skills CRUD
       createSkill,
       deleteSkill,
+      editSkillName,
       addRoadmapTopic,
       editRoadmapTopic,
       deleteRoadmapTopic,
