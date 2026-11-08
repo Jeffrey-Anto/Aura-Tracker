@@ -103,8 +103,8 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
       >
         {/* App Title */}
         <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-14 h-14 rounded-xl bg-gradient-to-tr from-[#00f2fe] to-[#4facfe]/10 shadow-[0_0_20px_rgba(0,242,254,0.15)] flex items-center justify-center mb-3 border border-white/10">
-            <AuraLogo size={32} />
+          <div className="mb-3 flex items-center justify-center">
+            <AuraLogo size={48} className="drop-shadow-[0_0_20px_rgba(0,242,254,0.35)]" />
           </div>
           <h1 className="font-heading text-3xl font-extrabold bg-gradient-to-r from-[#00f2fe] to-[#4facfe] bg-clip-text text-transparent tracking-wide">
             AURA

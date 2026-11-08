@@ -47,12 +47,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage })
         <button
           type="button"
           onClick={() => handleNavClick('dashboard')}
-          className="flex items-center gap-2 cursor-pointer text-left transition-all active:scale-[0.98] outline-none"
+          className="flex items-center gap-2.5 cursor-pointer text-left transition-all active:scale-[0.98] outline-none group"
           title="Go to Dashboard"
         >
-          <div className="w-8 h-8 rounded-lg bg-[#00f2fe]/10 flex items-center justify-center border border-[#00f2fe]/20">
-            <AuraLogo size={18} />
-          </div>
+          <AuraLogo size={32} className="shrink-0 drop-shadow-[0_0_10px_rgba(0,242,254,0.3)] transition-transform group-hover:scale-105" />
           <span className="font-heading font-bold text-xl bg-gradient-to-r from-[#00f2fe] to-[#4facfe] bg-clip-text text-transparent">Aura</span>
         </button>
         <button 
@@ -78,9 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage })
             className="flex items-center gap-3 cursor-pointer group text-left transition-all active:scale-[0.98] outline-none"
             title="Go to Dashboard"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#00f2fe]/10 flex items-center justify-center border border-[#00f2fe]/20 group-hover:border-[#00f2fe]/50 group-hover:shadow-[0_0_12px_rgba(0,242,254,0.3)] transition-all">
-              <AuraLogo size={18} />
-            </div>
+            <AuraLogo size={36} className="shrink-0 transition-transform duration-200 group-hover:scale-105 drop-shadow-[0_0_12px_rgba(0,242,254,0.35)]" />
             <span className="font-heading text-2xl font-bold bg-gradient-to-r from-[#00f2fe] to-[#4facfe] bg-clip-text text-transparent tracking-wide group-hover:brightness-110 transition-all">
               Aura
             </span>
