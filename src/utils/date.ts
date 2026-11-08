@@ -36,7 +36,7 @@ export const getRelativeLocalDateString = (daysAgo: number): string => {
 export const formatLocalDateStr = (dateStr: string, options?: Intl.DateTimeFormatOptions): string => {
   try {
     return parseLocalDate(dateStr).toLocaleDateString('en-US', options || { month: 'short', day: 'numeric' });
-  } catch (e) {
+  } catch {
     return dateStr;
   }
 };

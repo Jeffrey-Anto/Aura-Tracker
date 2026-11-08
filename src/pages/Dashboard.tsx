@@ -356,7 +356,7 @@ export const Dashboard: React.FC = () => {
           setActiveShortcutIds(parsed);
           return;
         }
-      } catch (e) {
+      } catch {
         // fallback
       }
     }

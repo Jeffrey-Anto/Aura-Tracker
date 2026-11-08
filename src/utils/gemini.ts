@@ -36,16 +36,6 @@ export const getGeminiApiKey = (): string | null => {
   return null;
 };
 
-/**
- * Saves a temporary Gemini API key to local storage for quick testing if env is not restarted
- */
-export const setSessionGeminiApiKey = (key: string): void => {
-  if (key) {
-    localStorage.setItem('aura_gemini_api_key', key.trim());
-  } else {
-    localStorage.removeItem('aura_gemini_api_key');
-  }
-};
 
 /**
  * Converts a File to Base64 (raw base64 string without data URL prefix)
@@ -85,8 +75,8 @@ export const extractFallbackChecklist = (text: string, filename: string): string
   for (const line of lines) {
     if (/^[-*+]\s*\[[\sx]\]\s+/i.test(line)) {
       items.push(line.replace(/^[-*+]\s*\[[\sx]\]\s+/i, ''));
-    } else if (/^\d+[\.\)]\s+/.test(line)) {
-      items.push(line.replace(/^\d+[\.\)]\s+/, ''));
+    } else if (/^\d+[.)]\s+/.test(line)) {
+      items.push(line.replace(/^\d+[.)]\s+/, ''));
     } else if (/^[-*•]\s+/.test(line)) {
       const clean = line.replace(/^[-*•]\s+/, '');
       if (clean.length > 5 && clean.length < 150) {

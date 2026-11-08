@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { GlassCard } from '../components/GlassCard';
-import { generateRoadmapFromPrompt, generateRoadmapFromFile, type GeneratedRoadmapResponse } from '../utils/gemini';
+import { generateRoadmapFromPrompt, generateRoadmapFromFile, type GeneratedRoadmapResponse, type GeneratedRoadmapLevel } from '../utils/gemini';
 
 export const SkillsTracker: React.FC = () => {
   const { 
@@ -206,14 +206,14 @@ export const SkillsTracker: React.FC = () => {
     setIsSavingRoadmap(true);
 
     try {
-      const customLevels = previewRoadmap.levels.map(lvl => ({
+      const customLevels = previewRoadmap.levels.map((lvl: GeneratedRoadmapLevel) => ({
         level_number: lvl.levelNumber,
         name: lvl.name
       }));
 
       const customRoadmap: { level: number; topic: string }[] = [];
-      previewRoadmap.levels.forEach(lvl => {
-        lvl.topics.forEach(t => {
+      previewRoadmap.levels.forEach((lvl: GeneratedRoadmapLevel) => {
+        lvl.topics.forEach((t: string) => {
           customRoadmap.push({
             level: lvl.levelNumber,
             topic: t
@@ -1164,12 +1164,12 @@ export const SkillsTracker: React.FC = () => {
                 <div className="flex items-center justify-between text-xs text-slate-400 font-semibold px-1">
                   <span>Generated Levels & Topics ({previewRoadmap.levels.length} levels)</span>
                   <span>
-                    {previewRoadmap.levels.reduce((sum, l) => sum + l.topics.length, 0)} total topics
+                    {previewRoadmap.levels.reduce((sum: number, l: GeneratedRoadmapLevel) => sum + l.topics.length, 0)} total topics
                   </span>
                 </div>
 
                 <div className="flex flex-col gap-2.5 max-h-72 overflow-y-auto pr-1 scrollbar-thin">
-                  {previewRoadmap.levels.map((lvl) => (
+                  {previewRoadmap.levels.map((lvl: GeneratedRoadmapLevel) => (
                     <div 
                       key={lvl.levelNumber} 
                       className="bg-white/2 border border-white/6 rounded-xl p-3.5 hover:border-white/10 transition-colors"
@@ -1187,7 +1187,7 @@ export const SkillsTracker: React.FC = () => {
                       </div>
 
                       <ul className="flex flex-col gap-1.5 pl-5 list-disc text-xs text-slate-400">
-                        {lvl.topics.map((t, idx) => (
+                        {lvl.topics.map((t: string, idx: number) => (
                           <li key={idx} className="leading-snug">
                             <span className="text-slate-300">{t}</span>
                           </li>
