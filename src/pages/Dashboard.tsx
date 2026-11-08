@@ -1,10 +1,214 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Flame, BookOpen, Binary, Dumbbell, Sparkles, TrendingUp, CheckCircle2, ChevronRight } from 'lucide-react';
+import { 
+  Flame, BookOpen, Binary, Dumbbell, Sparkles, TrendingUp, CheckCircle2, ChevronRight,
+  SlidersHorizontal, Target, ClipboardList, Map, LineChart, Activity, Trophy,
+  BookMarked, Settings as SettingsIcon, User, Plus, Trash2, ArrowUp, ArrowDown,
+  RotateCcw, X
+} from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useApp } from '../context/AppContext';
 import { GlassCard } from '../components/GlassCard';
 import { getLocalDateString } from '../utils/date';
+
+export interface DashboardShortcutItem {
+  id: string;
+  label: string;
+  category: 'quick-action' | 'navigation';
+  description: string;
+  icon: string;
+  color: 'cyan' | 'magenta' | 'rose' | 'amber' | 'emerald' | 'blue' | 'indigo' | 'slate';
+  actionType: 'log' | 'nav';
+  navTarget?: string;
+  logPayload?: {
+    type: string;
+    amount: number;
+    unit: string;
+    category: string;
+    notes: string;
+  };
+}
+
+const ALL_AVAILABLE_SHORTCUTS: DashboardShortcutItem[] = [
+  // Original 3 Quick Actions
+  {
+    id: 'quick-study',
+    label: 'Study +1h',
+    category: 'quick-action',
+    description: 'Quick log 1 hour of general study',
+    icon: 'BookOpen',
+    color: 'cyan',
+    actionType: 'log',
+    logPayload: {
+      type: 'study',
+      amount: 1,
+      unit: 'hrs',
+      category: 'General',
+      notes: 'Quick study hour logged from dashboard'
+    }
+  },
+  {
+    id: 'quick-dsa',
+    label: 'LeetCode +1',
+    category: 'quick-action',
+    description: 'Quick log 1 solved LeetCode problem',
+    icon: 'Binary',
+    color: 'magenta',
+    actionType: 'log',
+    logPayload: {
+      type: 'dsa',
+      amount: 1,
+      unit: 'solved',
+      category: 'Skills',
+      notes: 'Quick LeetCode problem logged from dashboard'
+    }
+  },
+  {
+    id: 'quick-workout',
+    label: 'Workout +30m',
+    category: 'quick-action',
+    description: 'Quick log 30 minutes of fitness workout',
+    icon: 'Dumbbell',
+    color: 'rose',
+    actionType: 'log',
+    logPayload: {
+      type: 'workout',
+      amount: 30,
+      unit: 'mins',
+      category: 'Fitness',
+      notes: 'Quick workout session logged from dashboard'
+    }
+  },
+  // Additional Quick Action
+  {
+    id: 'quick-reading',
+    label: 'Reading +30m',
+    category: 'quick-action',
+    description: 'Quick log 30 minutes of book reading',
+    icon: 'BookMarked',
+    color: 'amber',
+    actionType: 'log',
+    logPayload: {
+      type: 'reading',
+      amount: 30,
+      unit: 'mins',
+      category: 'Reading',
+      notes: 'Quick reading session logged from dashboard'
+    }
+  },
+  // Existing App Pages / Navigation Shortcuts
+  {
+    id: 'nav-goals',
+    label: 'Goal Manager',
+    category: 'navigation',
+    description: 'Manage and track daily and weekly goal targets',
+    icon: 'Target',
+    color: 'emerald',
+    actionType: 'nav',
+    navTarget: 'activity'
+  },
+  {
+    id: 'nav-tasks',
+    label: 'Task Manager',
+    category: 'navigation',
+    description: 'Open tasks, daily recurring checklists, and AI plans',
+    icon: 'ClipboardList',
+    color: 'blue',
+    actionType: 'nav',
+    navTarget: 'tasks'
+  },
+  {
+    id: 'nav-skills',
+    label: 'Roadmaps',
+    category: 'navigation',
+    description: 'Explore learning roadmaps and skill levels',
+    icon: 'Map',
+    color: 'cyan',
+    actionType: 'nav',
+    navTarget: 'skills'
+  },
+  {
+    id: 'nav-analytics',
+    label: 'Analytics',
+    category: 'navigation',
+    description: 'View deep performance metrics and charts',
+    icon: 'LineChart',
+    color: 'indigo',
+    actionType: 'nav',
+    navTarget: 'analytics'
+  },
+  {
+    id: 'nav-activity',
+    label: 'Activity Tracker',
+    category: 'navigation',
+    description: 'Log daily hours, workouts, and view activity history',
+    icon: 'Activity',
+    color: 'magenta',
+    actionType: 'nav',
+    navTarget: 'activity'
+  },
+  {
+    id: 'nav-achievements',
+    label: 'Achievements',
+    category: 'navigation',
+    description: 'Review trophies, badges, and milestones',
+    icon: 'Trophy',
+    color: 'amber',
+    actionType: 'nav',
+    navTarget: 'achievements'
+  },
+  {
+    id: 'nav-profile',
+    label: 'Profile',
+    category: 'navigation',
+    description: 'View level, rank, XP, and profile avatar',
+    icon: 'User',
+    color: 'blue',
+    actionType: 'nav',
+    navTarget: 'profile'
+  },
+  {
+    id: 'nav-settings',
+    label: 'Settings',
+    category: 'navigation',
+    description: 'Customize security, themes, and account settings',
+    icon: 'Settings',
+    color: 'slate',
+    actionType: 'nav',
+    navTarget: 'settings'
+  }
+];
+
+const DEFAULT_SHORTCUT_IDS = ['quick-study', 'quick-dsa', 'quick-workout'];
+
+const SHORTCUT_COLOR_CLASSES: Record<string, string> = {
+  cyan: 'bg-[#00f2fe]/10 hover:bg-[#00f2fe]/20 text-[#00f2fe] border-[#00f2fe]/15',
+  magenta: 'bg-[#e100ff]/10 hover:bg-[#e100ff]/20 text-[#e100ff] border-[#e100ff]/15',
+  rose: 'bg-[#ff4769]/10 hover:bg-[#ff4769]/20 text-[#ff4769] border-[#ff4769]/15',
+  amber: 'bg-[#f6d365]/10 hover:bg-[#f6d365]/20 text-[#f6d365] border-[#f6d365]/15',
+  emerald: 'bg-[#00b09b]/10 hover:bg-[#00b09b]/20 text-[#00b09b] border-[#00b09b]/15',
+  blue: 'bg-[#4facfe]/10 hover:bg-[#4facfe]/20 text-[#4facfe] border-[#4facfe]/15',
+  indigo: 'bg-[#7f00ff]/10 hover:bg-[#7f00ff]/20 text-[#7f00ff] border-[#7f00ff]/15',
+  slate: 'bg-white/5 hover:bg-white/10 text-slate-300 border-white/10'
+};
+
+const renderShortcutIcon = (iconName: string, size = 14) => {
+  switch (iconName) {
+    case 'BookOpen': return <BookOpen size={size} />;
+    case 'Binary': return <Binary size={size} />;
+    case 'Dumbbell': return <Dumbbell size={size} />;
+    case 'Target': return <Target size={size} />;
+    case 'ClipboardList': return <ClipboardList size={size} />;
+    case 'Map': return <Map size={size} />;
+    case 'LineChart': return <LineChart size={size} />;
+    case 'Activity': return <Activity size={size} />;
+    case 'Trophy': return <Trophy size={size} />;
+    case 'BookMarked': return <BookMarked size={size} />;
+    case 'Settings': return <SettingsIcon size={size} />;
+    case 'User': return <User size={size} />;
+    default: return <Sparkles size={size} />;
+  }
+};
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -19,7 +223,8 @@ export const Dashboard: React.FC = () => {
     goalStatus, 
     aiSuggestions,
     addLog,
-    skills
+    skills,
+    user
   } = useApp();
  
   // Aggregate stats
@@ -124,36 +329,101 @@ export const Dashboard: React.FC = () => {
   const remainingStudy = useMemo(() => Math.max(0, studyGoal - dailyStudyLogged), [studyGoal, dailyStudyLogged]);
   const remainingWorkout = useMemo(() => Math.max(0, workoutGoal - dailyWorkoutLogged), [workoutGoal, dailyWorkoutLogged]);
  
-  // Quick Action Click Handlers
-  const handleQuickStudy = () => {
-    addLog({
-      type: 'study',
-      amount: 1,
-      notes: 'Quick study hour logged from dashboard',
-      unit: 'hrs',
-      category: 'General'
-    });
+  // Dashboard Shortcuts State & Persistence
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [activeShortcutIds, setActiveShortcutIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`aura_dashboard_shortcuts_${user?.id || 'default'}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Error reading saved dashboard shortcuts:", e);
+    }
+    return DEFAULT_SHORTCUT_IDS;
+  });
+
+  useEffect(() => {
+    const key = `aura_dashboard_shortcuts_${user?.id || 'default'}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setActiveShortcutIds(parsed);
+          return;
+        }
+      } catch (e) {
+        // fallback
+      }
+    }
+    setActiveShortcutIds(DEFAULT_SHORTCUT_IDS);
+  }, [user?.id]);
+
+  const saveShortcuts = (newIds: string[]) => {
+    if (newIds.length === 0) return; // Enforce at least 1
+    setActiveShortcutIds(newIds);
+    try {
+      const key = `aura_dashboard_shortcuts_${user?.id || 'default'}`;
+      localStorage.setItem(key, JSON.stringify(newIds));
+    } catch (e) {
+      console.error("Error saving dashboard shortcuts:", e);
+    }
   };
- 
-  const handleQuickDSA = () => {
-    addLog({
-      type: 'dsa',
-      amount: 1,
-      notes: 'Quick LeetCode problem logged from dashboard',
-      unit: 'solved',
-      category: 'Skills'
-    });
+
+  const handleShortcutClick = (shortcut: DashboardShortcutItem) => {
+    if (shortcut.actionType === 'nav' && shortcut.navTarget) {
+      window.location.hash = shortcut.navTarget;
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    } else if (shortcut.actionType === 'log' && shortcut.logPayload) {
+      addLog({
+        type: shortcut.logPayload.type,
+        amount: shortcut.logPayload.amount,
+        notes: shortcut.logPayload.notes,
+        unit: shortcut.logPayload.unit,
+        category: shortcut.logPayload.category
+      });
+    }
   };
- 
-  const handleQuickWorkout = () => {
-    addLog({
-      type: 'workout',
-      amount: 30,
-      notes: 'Quick workout session logged from dashboard',
-      unit: 'mins',
-      category: 'Fitness'
-    });
+
+  const handleMoveShortcut = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= activeShortcutIds.length) return;
+    const next = [...activeShortcutIds];
+    const [moved] = next.splice(index, 1);
+    next.splice(targetIndex, 0, moved);
+    saveShortcuts(next);
   };
+
+  const handleRemoveShortcut = (id: string) => {
+    if (activeShortcutIds.length <= 1) return; // Never allow 0 buttons
+    const next = activeShortcutIds.filter(item => item !== id);
+    saveShortcuts(next);
+  };
+
+  const handleAddShortcut = (id: string) => {
+    if (activeShortcutIds.includes(id)) return;
+    const next = [...activeShortcutIds, id];
+    saveShortcuts(next);
+  };
+
+  const handleResetToDefaults = () => {
+    saveShortcuts(DEFAULT_SHORTCUT_IDS);
+  };
+
+  const activeShortcuts = useMemo(() => {
+    const list = activeShortcutIds
+      .map(id => ALL_AVAILABLE_SHORTCUTS.find(s => s.id === id))
+      .filter(Boolean) as DashboardShortcutItem[];
+    return list.length > 0 ? list : DEFAULT_SHORTCUT_IDS.map(id => ALL_AVAILABLE_SHORTCUTS.find(s => s.id === id)!).filter(Boolean);
+  }, [activeShortcutIds]);
+
+  const availableToAdd = useMemo(() => {
+    return ALL_AVAILABLE_SHORTCUTS.filter(s => !activeShortcutIds.includes(s.id));
+  }, [activeShortcutIds]);
 
   // Recharts Weekly logs mapping
   const chartData = useMemo(() => {
@@ -199,26 +469,26 @@ export const Dashboard: React.FC = () => {
           <span className="text-[10px] text-slate-500">Record common daily items in a single click</span>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {activeShortcuts.map((shortcut) => (
+            <button
+              key={shortcut.id}
+              onClick={() => handleShortcutClick(shortcut)}
+              className={`flex items-center gap-1.5 py-1.5 px-4 border rounded-xl text-xs font-semibold font-heading transition-all active:scale-[0.98] cursor-pointer ${SHORTCUT_COLOR_CLASSES[shortcut.color] || SHORTCUT_COLOR_CLASSES.cyan}`}
+              title={shortcut.actionType === 'nav' ? `Open ${shortcut.label}` : `Quick record ${shortcut.label}`}
+            >
+              {renderShortcutIcon(shortcut.icon)}
+              <span>{shortcut.label}</span>
+            </button>
+          ))}
+
           <button
-            onClick={handleQuickStudy}
-            className="flex items-center gap-1.5 py-1.5 px-4 bg-[#00f2fe]/10 hover:bg-[#00f2fe]/20 text-[#00f2fe] border border-[#00f2fe]/15 rounded-xl text-xs font-semibold font-heading transition-all active:scale-[0.98] cursor-pointer"
+            type="button"
+            onClick={() => setIsCustomizeOpen(true)}
+            className="flex items-center gap-1.5 py-1.5 px-3 bg-white/3 hover:bg-white/8 text-slate-400 hover:text-slate-200 border border-white/8 hover:border-white/15 rounded-xl text-xs font-semibold font-heading transition-all cursor-pointer"
+            title="Customize dashboard shortcuts"
           >
-            <BookOpen size={14} />
-            <span>Study +1h</span>
-          </button>
-          <button
-            onClick={handleQuickDSA}
-            className="flex items-center gap-1.5 py-1.5 px-4 bg-[#e100ff]/10 hover:bg-[#e100ff]/20 text-[#e100ff] border border-[#e100ff]/15 rounded-xl text-xs font-semibold font-heading transition-all active:scale-[0.98] cursor-pointer"
-          >
-            <Binary size={14} />
-            <span>LeetCode +1</span>
-          </button>
-          <button
-            onClick={handleQuickWorkout}
-            className="flex items-center gap-1.5 py-1.5 px-4 bg-[#ff4769]/10 hover:bg-[#ff4769]/20 text-[#ff4769] border border-[#ff4769]/15 rounded-xl text-xs font-semibold font-heading transition-all active:scale-[0.98] cursor-pointer"
-          >
-            <Dumbbell size={14} />
-            <span>Workout +30m</span>
+            <SlidersHorizontal size={13} />
+            <span className="text-[11px]">Customize</span>
           </button>
         </div>
       </GlassCard>
@@ -582,6 +852,170 @@ export const Dashboard: React.FC = () => {
           ))}
         </div>
       </GlassCard>
+
+      {/* Customize Shortcuts Modal */}
+      {isCustomizeOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b101e] border border-white/10 rounded-2xl w-full max-w-xl shadow-[0_10px_45px_rgba(0,0,0,0.8)] overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-white/5">
+              <div>
+                <h4 className="font-heading font-bold text-base text-slate-100 flex items-center gap-2">
+                  <SlidersHorizontal size={16} className="text-[#00f2fe]" />
+                  <span>Customize Dashboard Shortcuts</span>
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Add, remove, or reorder your quick action buttons. At least 1 shortcut is required.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomizeOpen(false)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex flex-col gap-6">
+              {/* Section 1: Active Shortcuts */}
+              <div>
+                <div className="flex justify-between items-center mb-2.5">
+                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Current Shortcuts ({activeShortcuts.length})
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Use arrows to reorder
+                  </span>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  {activeShortcuts.map((item, index) => (
+                    <div 
+                      key={item.id}
+                      className="flex items-center justify-between p-3 rounded-xl bg-white/2 border border-white/5 hover:border-white/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] font-mono font-bold text-slate-500 w-4 text-center">
+                          {index + 1}
+                        </span>
+                        <div className={`p-1.5 rounded-lg border flex items-center justify-center ${SHORTCUT_COLOR_CLASSES[item.color]}`}>
+                          {renderShortcutIcon(item.icon, 14)}
+                        </div>
+                        <div>
+                          <span className="font-heading font-semibold text-xs text-slate-100 block">
+                            {item.label}
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            {item.description}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => handleMoveShortcut(index, 'up')}
+                          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors disabled:opacity-20 disabled:hover:text-slate-400 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                          title="Move up"
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === activeShortcuts.length - 1}
+                          onClick={() => handleMoveShortcut(index, 'down')}
+                          className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors disabled:opacity-20 disabled:hover:text-slate-400 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                          title="Move down"
+                        >
+                          <ArrowDown size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={activeShortcuts.length <= 1}
+                          onClick={() => handleRemoveShortcut(item.id)}
+                          className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-20 disabled:hover:text-slate-500 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed ml-1"
+                          title={activeShortcuts.length <= 1 ? "At least 1 shortcut required" : "Remove shortcut"}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 2: Available Shortcuts to Add */}
+              <div>
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block mb-2.5">
+                  Available Shortcuts to Add ({availableToAdd.length})
+                </span>
+
+                {availableToAdd.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-slate-500 bg-white/2 rounded-xl border border-dashed border-white/5">
+                    All available shortcuts have been added to your dashboard!
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {availableToAdd.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-white/2 border border-white/5 hover:border-white/10 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                          <div className={`p-1.5 rounded-lg border flex items-center justify-center shrink-0 ${SHORTCUT_COLOR_CLASSES[item.color]}`}>
+                            {renderShortcutIcon(item.icon, 13)}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-heading font-semibold text-xs text-slate-100 block truncate">
+                              {item.label}
+                            </span>
+                            <span className="text-[10px] text-slate-500 block truncate">
+                              {item.category === 'quick-action' ? 'Quick Action' : 'Navigation Link'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAddShortcut(item.id)}
+                          className="py-1 px-2.5 bg-[#00f2fe]/10 hover:bg-[#00f2fe]/20 text-[#00f2fe] border border-[#00f2fe]/20 rounded-lg text-xs font-semibold font-heading flex items-center gap-1 shrink-0 transition-colors cursor-pointer"
+                        >
+                          <Plus size={12} />
+                          <span>Add</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center px-6 py-4 border-t border-white/5 bg-white/1">
+              <button
+                type="button"
+                onClick={handleResetToDefaults}
+                className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RotateCcw size={12} />
+                <span>Reset to Default 3</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setIsCustomizeOpen(false)}
+                className="py-2 px-5 bg-gradient-to-r from-[#00f2fe] to-[#4facfe] text-slate-900 font-heading font-semibold text-xs rounded-xl shadow-[0_0_15px_rgba(0,242,254,0.3)] hover:scale-[1.01] transition-all cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
