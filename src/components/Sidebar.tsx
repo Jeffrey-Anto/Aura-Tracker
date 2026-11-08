@@ -44,12 +44,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage })
     <>
       {/* Mobile Header Toggle */}
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-[#090e1a]/80 border-b border-white/5 backdrop-blur-md z-40 flex items-center justify-between px-6">
-        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => handleNavClick('dashboard')}
+          className="flex items-center gap-2 cursor-pointer text-left transition-all active:scale-[0.98] outline-none"
+          title="Go to Dashboard"
+        >
           <div className="w-8 h-8 rounded-lg bg-[#00f2fe]/10 flex items-center justify-center border border-[#00f2fe]/20">
             <AuraLogo size={18} />
           </div>
           <span className="font-heading font-bold text-xl bg-gradient-to-r from-[#00f2fe] to-[#4facfe] bg-clip-text text-transparent">Aura</span>
-        </div>
+        </button>
         <button 
           onClick={() => setMobileOpen(!mobileOpen)} 
           className="p-2 text-slate-400 hover:text-white transition-colors"
@@ -67,14 +72,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage })
       `}>
         {/* Sidebar Header */}
         <div className="h-20 flex items-center px-6 border-b border-white/5 justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#00f2fe]/10 flex items-center justify-center border border-[#00f2fe]/20">
+          <button
+            type="button"
+            onClick={() => handleNavClick('dashboard')}
+            className="flex items-center gap-3 cursor-pointer group text-left transition-all active:scale-[0.98] outline-none"
+            title="Go to Dashboard"
+          >
+            <div className="w-8 h-8 rounded-lg bg-[#00f2fe]/10 flex items-center justify-center border border-[#00f2fe]/20 group-hover:border-[#00f2fe]/50 group-hover:shadow-[0_0_12px_rgba(0,242,254,0.3)] transition-all">
               <AuraLogo size={18} />
             </div>
-            <span className="font-heading text-2xl font-bold bg-gradient-to-r from-[#00f2fe] to-[#4facfe] bg-clip-text text-transparent tracking-wide">
+            <span className="font-heading text-2xl font-bold bg-gradient-to-r from-[#00f2fe] to-[#4facfe] bg-clip-text text-transparent tracking-wide group-hover:brightness-110 transition-all">
               Aura
             </span>
-          </div>
+          </button>
           {/* Close button inside mobile menu */}
           <button 
             onClick={() => setMobileOpen(false)} 

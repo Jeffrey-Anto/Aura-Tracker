@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import type { User } from '@supabase/supabase-js';
 import type { Log, CustomActivity, Goals, Skill, SkillLevel, Badge, Milestone, StreakState, AppState, GoalTarget, Task, TaskChecklistItem, TaskCompletionRecord, Profile, Goal } from '../types';
 import { getLocalDateString, parseLocalDate, getRelativeLocalDateString } from '../utils/date';
@@ -220,6 +220,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toast, setToast] = useState<{ title: string; message: string; type: 'success' | 'info' | 'level-up' | 'badge' | 'milestone' } | null>(null);
   const [rewardClaimed, setRewardClaimed] = useState<boolean>(false);
 
+  // User ID and fetch tracking to prevent unwanted full-screen reloading on tab switches
+  const currentLoadedUserId = useRef<string | null>(null);
+  const isFetchingData = useRef<boolean>(false);
+
   // Initialize Auth Sync Listeners
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -227,24 +231,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    // Load active session
+    // Load active session on initial mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchAllData(session.user.id);
+      const activeUser = session?.user ?? null;
+      setUser(activeUser);
+      if (activeUser) {
+        currentLoadedUserId.current = activeUser.id;
+        fetchAllData(activeUser.id, false);
       } else {
         setAuthLoading(false);
       }
     });
 
     // Listen to changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const activeUser = session?.user ?? null;
-      setUser(activeUser);
-      if (activeUser) {
-        fetchAllData(activeUser.id);
-      } else {
+
+      // Token refresh or window focus events: do NOT wipe screen or re-fetch all tables
+      if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (activeUser) {
+          setUser(activeUser);
+        }
+        return;
+      }
+
+      if (event === 'SIGNED_OUT' || !activeUser) {
         // Clear state on Sign Out
+        setUser(null);
+        currentLoadedUserId.current = null;
         setProfile(null);
         setLogs([]);
         setTasks([]);
@@ -258,7 +272,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setXp(0);
         setLevel(1);
         setAuthLoading(false);
+        return;
       }
+
+      // If user is already loaded and it's the exact same user, do not trigger a full reloading screen
+      if (activeUser.id === currentLoadedUserId.current) {
+        setUser(activeUser);
+        return;
+      }
+
+      // New user signed in
+      setUser(activeUser);
+      currentLoadedUserId.current = activeUser.id;
+      fetchAllData(activeUser.id, false);
     });
 
     return () => subscription.unsubscribe();
@@ -274,8 +300,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [profile?.theme]);
 
   // Load user data from Supabase
-  const fetchAllData = async (userId: string) => {
-    setAuthLoading(true);
+  const fetchAllData = async (userId: string, isSilent = false) => {
+    if (isFetchingData.current) return;
+    isFetchingData.current = true;
+
+    // Only display full-screen loading on cold boot before data is loaded
+    if (!isSilent && currentLoadedUserId.current !== userId) {
+      setAuthLoading(true);
+    }
     try {
       // 1. Load profile
       const { data: profileData } = await supabase
@@ -568,6 +600,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error('Error fetching data from Supabase', err);
     } finally {
       setAuthLoading(false);
+      isFetchingData.current = false;
+      currentLoadedUserId.current = userId;
     }
   };
 
