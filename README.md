@@ -216,9 +216,11 @@ WITH CHECK (auth.uid() = user_id);
    VITE_SUPABASE_URL=https://your-project-id.supabase.co
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-   # Gemini AI Configuration (for PDF checklists & AI roadmaps)
-   VITE_GEMINI_API_KEY=your_google_gemini_api_key
+   # Gemini AI Configuration (Server-Side Proxy - never exposed in client bundle)
+   GEMINI_API_KEY=your_google_gemini_api_key
    ```
+   > [!NOTE]
+   > For production deployments (e.g. Vercel), add `GEMINI_API_KEY` under **Project Settings > Environment Variables**. The application routes AI requests through a secure serverless endpoint (`/api/gemini`), ensuring API keys are never bundled into client JavaScript or accessible via browser DevTools.
 
 4. **Initialize Database Schema:**
    - Open your Supabase SQL Editor.
