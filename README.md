@@ -1,11 +1,14 @@
 <div align="center">
 
-  <img src="public/aura-logo.png" alt="Aura Logo" width="100" />
+  <img src="public/aura-logo.png" alt="Aura Logo" width="105" />
 
   # Aura — Personal Analytics Operating System
 
   **The Intelligent Productivity & Learning Cockpit for Developers, Engineers, and High-Performers.**
 
+  <br />
+
+  [![Live Demo](https://img.shields.io/badge/LIVE_DEMO-jf--aura--tracker.vercel.app-00f2fe?style=for-the-badge&logo=vercel&logoColor=black)](https://jf-aura-tracker.vercel.app/)
   [![React](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
   [![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-v4.0-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
@@ -15,16 +18,23 @@
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
   <p align="center">
+    <a href="https://jf-aura-tracker.vercel.app/" target="_blank"><b>🌐 View Live Application</b></a> •
     <a href="#-core-features">Core Features</a> •
     <a href="#-system-architecture">Architecture</a> •
     <a href="#-screenshots--ui-walkthrough">Screenshots</a> •
     <a href="#-tech-stack">Tech Stack</a> •
     <a href="#-database-schema--security">Database Schema</a> •
     <a href="#-getting-started">Getting Started</a> •
-    <a href="#-author--contact">Author</a>
+    <a href="#-author--connect">Author</a>
   </p>
 
 </div>
+
+---
+
+## 🚀 Live Deployment
+The application is live and deployed on Vercel:  
+👉 **[https://jf-aura-tracker.vercel.app/](https://jf-aura-tracker.vercel.app/)**
 
 ---
 
@@ -39,63 +49,71 @@ Unlike traditional to-do apps or generic habit trackers, Aura integrates **gener
 ## 📸 Screenshots & UI Walkthrough
 
 ### 1. Skills Matrix & AI-Generated Roadmaps
-*Structured milestones, multi-tier curriculum levels, real-time topic completion percentages, and gamified XP.*
+*Structured curriculum levels, real-time topic progress tracking, and AI-powered roadmap synthesis via text prompt or document upload.*
 
 <div align="center">
-  <img src="docs/screenshots/skills-roadmaps.jpg" alt="Skills and Roadmaps Dashboard" width="900" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);" />
+  <img src="docs/screenshots/skills-roadmaps.jpg" alt="Skills and Roadmaps Dashboard" width="920" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);" />
 </div>
 
 <br />
 
-### 2. Activity Tracker & Dynamic Goals Manager
-*Log study hours, track custom unit metrics, and manage unbounded, multi-frequency daily/weekly/monthly goals.*
+### 2. Activity Tracking & Dynamic Goals Management
+*Log daily focus sessions with precision duration sliders, automatically sync custom categories, and configure unbounded, multi-frequency daily, weekly, and monthly target metrics.*
 
 <div align="center">
-  <img src="docs/screenshots/activity-goals.png" alt="Activity Tracker and Goals Manager" width="900" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);" />
+  <img src="docs/screenshots/activity-tracker.jpg" alt="Activity Tracker and History" width="920" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); margin-bottom: 14px;" />
+</div>
+
+<div align="center">
+  <img src="docs/screenshots/goals-manager.png" alt="Dynamic Goals Manager" width="460" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);" />
+  <p><sub><i>Dynamic Goals Manager with unlimited goals, customizable target units, and delete safeguards</i></sub></p>
 </div>
 
 <br />
 
-### 3. Quick-Log Activity Modal
-*Precise metric duration sliders, category dropdowns dynamically tied to custom goals, and instant streak calculations.*
+### 3. Analytics Insights & Behavioral Charts
+*60-day consistency heatmap, dual-bar study vs. workout volume charts, skill focus share distribution donut, and 14-day productivity velocity progression curve.*
 
 <div align="center">
-  <img src="docs/screenshots/log-activity.png" alt="Log Daily Activity" width="450" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);" />
+  <img src="docs/screenshots/analytics-insights.png" alt="Analytics Insights and Visual Charts" width="920" style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);" />
 </div>
 
 ---
 
 ## 🚀 Core Features & Engineering Highlights
 
-### 🤖 1. Gemini AI Document & Roadmap Intelligence
+### 📊 1. Analytics Engine & Interactive Data Visualizations
+- **60-Day Consistency Heatmap**: Visual contribution density map showing consistency across all habits with real-time level color coding.
+- **Active Streak Timeline**: 15-day granular history displaying active grind status with teal verification markers.
+- **Study & Workout Volume Bar Chart**: Recharts-powered dual-bar visualization tracking daily study hours against physical workouts with custom tooltips.
+- **Skill Focus Share Donut**: Proportional distribution of time and topics checked across active roadmap paths (React, DSA, Kotlin, Aptitude).
+- **Productivity Velocity Trend**: Glowing area chart calculating consistency scores over 14-day rolling intervals with peak performance tracking.
+- **Predictive Velocity Forecasting**: Estimates target completion dates for ongoing skills and roadmaps based on 14-day rolling averages.
+
+### 🤖 2. Gemini AI Document & Roadmap Intelligence
 - **Document-to-Checklist Pipeline**: Upload any project document, syllabus, or PDF. Aura extracts the content and triggers Google Gemini to generate ordered, actionable sub-task checklists directly into task cards.
-- **AI Prompt-to-Roadmap Generation**: Type any skill (e.g., *"Kubernetes & Microservices Architecture"*), and the Gemini AI synthesizes a multi-level roadmap with structured topics, milestones, and preview confirmation before database persistence.
+- **AI Prompt-to-Roadmap Generation**: Type any skill (e.g., *"Kotlin Android App Development"*), and the Gemini AI synthesizes a multi-level roadmap with structured topics, milestones, and preview confirmation before database persistence.
 - **Client-Safe Fallback**: Includes local algorithmic fallback parsers ensuring zero interruption if external API quotas are exceeded.
 
-### 🎯 2. Dynamic Scalable Goal Management
+### 🎯 3. Dynamic Scalable Goal Management
 - **Unbounded Multi-Period Goals**: Replaced legacy fixed schemas with a dynamic, user-scoped relational `goals` architecture. Users can add, edit, archive, and delete an arbitrary number of goals.
 - **Automated Dropdown Sync**: Adding any goal automatically maps the category directly into the Activity Logger dropdown for friction-free metric tracking.
 - **Visual Completion Gauges**: Real-time progress bars calculating percentage thresholds against daily, weekly, and monthly targets.
 
-### 🔄 3. Smart Recurring Tasks & History Analytics
+### 🔄 4. Smart Recurring Tasks & History Analytics
 - **Daily Auto-Reset Engine**: Tasks marked as *“repeats daily”* automatically reset completion statuses and sub-checklists at 00:00 local time without manual re-entry.
 - **Historical Retention & Streaks**: Preserves an immutable log of daily recurring task completions stored as structured JSON arrays, preventing data overwrite.
-- **Dedicated Recurring Analytics Chart**: Recharts-powered visualization plotting daily completion velocity and recurring task streaks over time.
+- **Dedicated Recurring Analytics**: Tracks daily completion velocity and recurring task streaks over time.
 
-### ⚡ 4. Customizable Dashboard Shortcuts
+### ⚡ 5. Customizable Dashboard Shortcuts
 - **Modular Quick-Action Bar**: Dashboard shortcuts can be customized, reordered, added, or removed (enforcing a minimum of 1 active shortcut).
 - **Persistent Preferences**: Shortcut order and selections persist seamlessly across sessions per user in Supabase and local storage.
 - **Instant Actions**: One-click shortcuts for rapid logging (e.g. `+1h Study`, `+30m Workout`) and deep navigation to sub-modules.
 
-### 🎮 5. Gamification & Progression System
+### 🎮 6. Gamification & Progression System
 - **Leveling & XP Engine**: Every tracked activity, completed checklist item, and reached milestone awards dynamic XP.
 - **Achievement Showcase**: Visual rank badges (e.g., *“Deep Worker”*, *“Code Marathoner”*) unlocked through consistent streaks and learning volume.
 - **Celebration Modals**: Framer Motion animated overlay effects celebrating level-ups and unlocked achievements.
-
-### 📊 6. Analytics & GitHub-Style Heatmaps
-- **63-Day Activity Heatmap**: Visual contribution density map showing consistency across all habits.
-- **Multi-Chart Analytics**: Interactive Bar, Line, Area, and Donut charts rendering categorical distribution and productivity velocity.
-- **Predictive Velocity Forecasting**: Estimates target completion dates for ongoing skills and roadmaps based on 14-day rolling averages.
 
 ---
 
@@ -136,7 +154,7 @@ graph TD
 | Layer | Technology | Architectural Rationale |
 |---|---|---|
 | **Framework** | **React 19** + **TypeScript** | Strict type safety, clean component lifecycle, modern concurrent rendering features. |
-| **Bundler & Tooling** | **Vite 6** + **ESLint** | Instant HMR development cycles, tree-shaking, sub-2.5s production builds. |
+| **Bundler & Tooling** | **Vite 6** + **ESLint** | Instant HMR development cycles, tree-shaking, sub-2s production builds. |
 | **Styling** | **Tailwind CSS v4** | Modern theme variables, hardware-accelerated glassmorphism, dynamic theme switches. |
 | **Motion** | **Framer Motion 12** | Physics-based spring animations, layout transitions, and celebration modal overlays. |
 | **Charts** | **Recharts 3** | SVG-based responsive data visualizations, tooltips, and streak velocity graphs. |
@@ -234,6 +252,7 @@ WITH CHECK (auth.uid() = user_id);
 *Computer Science & Engineering Student*  
 Government College of Engineering, Srirangam (GCE-S)
 
+- **Live Application**: [https://jf-aura-tracker.vercel.app/](https://jf-aura-tracker.vercel.app/)
 - **GitHub**: [@Jeffrey-Anto](https://github.com/Jeffrey-Anto)
 - **Project Repository**: [Aura-Tracker](https://github.com/Jeffrey-Anto/Aura-Tracker)
 - **Specialization**: Full-Stack Development, React/TypeScript Architecture, Intelligent Web Applications.
